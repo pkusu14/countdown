@@ -670,35 +670,42 @@
     toastTimer = setTimeout(function () { el.hidden = true; }, 2600);
   }
 
+  /* If a phone ever ends up running this script against an older cached page,
+     a missing element must not take every other button down with it. */
+  function on(id, type, fn) {
+    var el = $(id);
+    if (el) el.addEventListener(type, fn);
+  }
+
   function wire() {
-    $('add-btn').addEventListener('click', function () { openSheet(null); });
-    $('empty-add').addEventListener('click', function () { openSheet(null); });
-    $('share-btn').addEventListener('click', shareLink);
+    on('add-btn', 'click', function () { openSheet(null); });
+    on('empty-add', 'click', function () { openSheet(null); });
+    on('share-btn', 'click', shareLink);
 
-    $('event-form').addEventListener('submit', submit);
-    $('f-cancel').addEventListener('click', closeSheet);
-    $('f-delete').addEventListener('click', removeEvent);
-    $('sheet-backdrop').addEventListener('click', closeSheet);
+    on('event-form', 'submit', submit);
+    on('f-cancel', 'click', closeSheet);
+    on('f-delete', 'click', removeEvent);
+    on('sheet-backdrop', 'click', closeSheet);
 
-    $('empty-paste').addEventListener('click', openPaste);
-    $('foot-paste').addEventListener('click', openPaste);
-    $('paste-cancel').addEventListener('click', closePaste);
-    $('paste-backdrop').addEventListener('click', closePaste);
-    $('paste-clip').addEventListener('click', readClipboard);
-    $('paste-go').addEventListener('click', applyPaste);
+    on('empty-paste', 'click', openPaste);
+    on('foot-paste', 'click', openPaste);
+    on('paste-cancel', 'click', closePaste);
+    on('paste-backdrop', 'click', closePaste);
+    on('paste-clip', 'click', readClipboard);
+    on('paste-go', 'click', applyPaste);
 
-    $('import-ignore').addEventListener('click', closeImport);
-    $('import-backdrop').addEventListener('click', closeImport);
-    $('import-merge').addEventListener('click', function () { applyImport('merge'); });
-    $('import-replace').addEventListener('click', function () { applyImport('replace'); });
+    on('import-ignore', 'click', closeImport);
+    on('import-backdrop', 'click', closeImport);
+    on('import-merge', 'click', function () { applyImport('merge'); });
+    on('import-replace', 'click', function () { applyImport('replace'); });
 
-    $('celebrate-close').addEventListener('click', function () {
+    on('celebrate-close', 'click', function () {
       $('celebrate').hidden = true;
       /* the event just moved into the past, so the ordering needs redoing */
       render();
     });
 
-    $('list').addEventListener('click', function (ev) {
+    on('list', 'click', function (ev) {
       var row = ev.target.closest('.row');
       if (row) openSheet(byId(row.dataset.id));
     });
@@ -715,7 +722,24 @@
 
   function registerSW() {
     if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-    navigator.serviceWorker.register('sw.js').catch(function () {});
+
+    /* Whether anything was already in charge. On a first install there is
+       nothing to refresh, so the reload below must not fire. */
+    var hadController = !!navigator.serviceWorker.controller;
+    var refreshing = false;
+
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (!hadController || refreshing) return;
+      /* A newer version just took over. Reload so the page and the script
+         running against it are from the same build - otherwise buttons can
+         render without any code behind them. */
+      refreshing = true;
+      location.reload();
+    });
+
+    navigator.serviceWorker.register('sw.js')
+      .then(function (reg) { reg.update(); })
+      .catch(function () {});
   }
 
   function init() {

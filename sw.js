@@ -4,7 +4,7 @@
  * and memes, which are big and only fetched as they come up. Downloading the
  * whole meme folder onto his phone up front would be rude. */
 
-const VERSION = 'v2';
+const VERSION = 'v3';
 const SHELL_CACHE = `us-shell-${VERSION}`;
 const MEME_CACHE = `us-memes-${VERSION}`;
 
@@ -75,32 +75,26 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // page loads: try the network so a new deploy lands immediately, fall back to cache
-  if (req.mode === 'navigate') {
-    event.respondWith(
-      fetch(req)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(SHELL_CACHE).then((cache) => cache.put('index.html', copy));
-          return res;
-        })
-        .catch(() => caches.match('index.html').then((hit) => hit || caches.match('./')))
-    );
-    return;
-  }
-
-  // everything else: serve the cached copy instantly, refresh it in the background
+  // The whole app shell goes network-first, HTML and scripts alike.
+  //
+  // Serving a stale script alongside fresh HTML is the worst possible outcome:
+  // buttons render but nothing responds to them. The shell is only a few KB, so
+  // always asking the network is cheap, and the cache still covers being offline.
+  // 'no-cache' forces a revalidation so GitHub Pages can't serve a stale copy
+  // out of the browser's own HTTP cache either.
   event.respondWith(
-    caches.open(SHELL_CACHE).then((cache) =>
-      cache.match(req).then((hit) => {
-        const network = fetch(req)
-          .then((res) => {
-            if (res.ok) cache.put(req, res.clone());
-            return res;
-          })
-          .catch(() => hit);
-        return hit || network;
+    fetch(req, { cache: 'no-cache' })
+      .then((res) => {
+        if (res && res.ok) {
+          const copy = res.clone();
+          const key = req.mode === 'navigate' ? 'index.html' : req;
+          caches.open(SHELL_CACHE).then((cache) => cache.put(key, copy));
+        }
+        return res;
       })
-    )
+      .catch(() =>
+        caches.match(req.mode === 'navigate' ? 'index.html' : req)
+          .then((hit) => hit || caches.match('./'))
+      )
   );
 });
