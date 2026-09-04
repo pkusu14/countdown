@@ -52,6 +52,7 @@
     <p class="empty-big">Nothing on the calendar.</p>
     <p class="empty-sub">Which is, frankly, unacceptable. Add the next time you're seeing him.</p>
     <button id="empty-add" class="btn primary" type="button">Add the first one</button>
+    <button id="empty-paste" class="link-btn" type="button">or paste a link someone sent you</button>
   </section>
 
   <!-- Meme of the day -->
@@ -73,6 +74,7 @@
   </section>
 
   <footer class="foot">
+    <button id="foot-paste" class="link-btn" type="button">paste a link someone sent you</button>
     <p id="foot-note">made with an unreasonable amount of longing</p>
   </footer>
 
@@ -117,6 +119,31 @@
       <button type="submit" class="btn primary">Save</button>
     </div>
   </form>
+</div>
+
+<!-- Paste a shared link (the only way in on an installed iPhone app) -->
+<div id="paste-backdrop" class="backdrop" hidden></div>
+<div id="paste" class="sheet" role="dialog" aria-modal="true" aria-labelledby="paste-title" hidden>
+  <div class="sheet-grip"></div>
+  <h3 id="paste-title" class="sheet-title">Paste a link</h3>
+  <p class="sheet-body">
+    Copy the link out of your messages and paste it in here. Opening it in the
+    browser won't work &mdash; this app keeps its own separate list.
+  </p>
+
+  <label class="field">
+    <span class="field-label">The link</span>
+    <textarea id="paste-input" class="paste-box" rows="3" placeholder="https://..." autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+  </label>
+
+  <p id="paste-error" class="form-error" hidden></p>
+
+  <div class="sheet-actions">
+    <button type="button" id="paste-clip" class="btn">Paste</button>
+    <div class="spacer"></div>
+    <button type="button" id="paste-cancel" class="btn">Cancel</button>
+    <button type="button" id="paste-go" class="btn primary">Bring them in</button>
+  </div>
 </div>
 
 <!-- Incoming shared events -->

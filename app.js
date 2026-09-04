@@ -486,7 +486,12 @@
     var incoming;
     try { incoming = decodeEvents(m[1]); }
     catch (e) { return toast('That link looked broken'); }
-    if (!incoming.length) return;
+
+    showImport(incoming);
+  }
+
+  function showImport(incoming) {
+    if (!incoming || !incoming.length) return;
 
     pendingImport = incoming;
 
@@ -536,6 +541,64 @@
   }
 
   function key(e) { return e.title.toLowerCase() + '|' + Date.parse(e.date); }
+
+  /* ---------------- pasting a link in ---------------- */
+
+  /* An installed app on iOS gets storage of its own, separate from Safari, and
+     tapping a link always opens Safari rather than the app. So the only way to
+     get shared events into the installed copy is to paste the link in here. */
+
+  function openPaste() {
+    $('paste-input').value = '';
+    $('paste-error').hidden = true;
+    $('paste-backdrop').hidden = false;
+    $('paste').hidden = false;
+    setTimeout(function () { $('paste-input').focus(); }, 60);
+  }
+
+  function closePaste() {
+    $('paste').hidden = true;
+    $('paste-backdrop').hidden = true;
+  }
+
+  function readClipboard() {
+    if (!navigator.clipboard || !navigator.clipboard.readText) {
+      return pasteError('Long-press the box above and choose Paste.');
+    }
+    navigator.clipboard.readText()
+      .then(function (text) {
+        $('paste-input').value = text;
+        $('paste-error').hidden = true;
+      })
+      .catch(function () {
+        pasteError('Long-press the box above and choose Paste.');
+      });
+  }
+
+  function applyPaste() {
+    var text = $('paste-input').value.trim();
+    if (!text) return pasteError('Paste the link in first.');
+
+    /* accepts the whole link or just the code on the end of it */
+    var m = /[#&]e=([A-Za-z0-9\-_]+)/.exec(text);
+    var code = m ? m[1] : (/^[A-Za-z0-9\-_]+$/.test(text) ? text : null);
+    if (!code) return pasteError("That doesn't look like one of our links.");
+
+    var incoming;
+    try { incoming = decodeEvents(code); }
+    catch (e) { incoming = []; }
+
+    if (!incoming.length) return pasteError('That link is damaged - ask for a fresh one.');
+
+    closePaste();
+    showImport(incoming);
+  }
+
+  function pasteError(msg) {
+    var el = $('paste-error');
+    el.textContent = msg;
+    el.hidden = false;
+  }
 
   /* ---------------- zero moment ---------------- */
 
@@ -617,6 +680,13 @@
     $('f-delete').addEventListener('click', removeEvent);
     $('sheet-backdrop').addEventListener('click', closeSheet);
 
+    $('empty-paste').addEventListener('click', openPaste);
+    $('foot-paste').addEventListener('click', openPaste);
+    $('paste-cancel').addEventListener('click', closePaste);
+    $('paste-backdrop').addEventListener('click', closePaste);
+    $('paste-clip').addEventListener('click', readClipboard);
+    $('paste-go').addEventListener('click', applyPaste);
+
     $('import-ignore').addEventListener('click', closeImport);
     $('import-backdrop').addEventListener('click', closeImport);
     $('import-merge').addEventListener('click', function () { applyImport('merge'); });
@@ -634,7 +704,7 @@
     });
 
     document.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Escape') { closeSheet(); closeImport(); }
+      if (ev.key === 'Escape') { closeSheet(); closeImport(); closePaste(); }
     });
 
     /* phones freeze timers in the background - resync on return */

@@ -35,6 +35,19 @@ rides in the part of the URL after `#`, which browsers never send to a server.
 
 Send a fresh link whenever you change something.
 
+### On an installed iPhone app, paste the link instead of tapping it
+
+iOS gives a home-screen web app its own storage, walled off from Safari, and
+tapping a link always opens Safari rather than the app. So events imported in
+Safari are invisible to the installed app.
+
+The way round it: copy the link out of your messages, open the app from its
+icon, and use "paste a link someone sent you" at the bottom of the screen.
+That imports straight into the app's own list.
+
+Android doesn't have this split - an installed app there shares Chrome's
+storage, so tapping the link works normally.
+
 ## Installing it
 
 **Android (Chrome)** - open the link, tap the three-dot menu, "Add to Home
