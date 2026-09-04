@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Countdown</title>
+
+<meta name="theme-color" content="#0b0b0f">
+<meta name="description" content="A countdown to the next time we're in the same place.">
+<link rel="manifest" href="manifest.webmanifest">
+
+<!-- iOS home screen: Safari ignores most of the manifest and needs these -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Countdown">
+<link rel="apple-touch-icon" href="assets/icons/icon-180.png">
+<link rel="icon" href="assets/icons/icon-192.png">
+
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="topbar">
+    <h1 class="brand">us<span class="dot">.</span></h1>
+    <div class="topbar-actions">
+      <button id="share-btn" class="icon-btn" type="button" title="Send these to him">Share</button>
+      <button id="add-btn" class="icon-btn primary" type="button" title="Add an event">Add</button>
+    </div>
+  </header>
+
+  <!-- Hero: the soonest upcoming event -->
+  <section id="hero" class="hero" hidden>
+    <p id="hero-eyebrow" class="eyebrow">counting down to</p>
+    <h2 id="hero-title" class="hero-title">—</h2>
+
+    <div id="hero-clock" class="clock" role="timer" aria-live="off">
+      <div class="unit"><span id="d" class="num">0</span><span class="lbl">days</span></div>
+      <div class="unit"><span id="h" class="num">0</span><span class="lbl">hrs</span></div>
+      <div class="unit"><span id="m" class="num">0</span><span class="lbl">min</span></div>
+      <div class="unit"><span id="s" class="num">0</span><span class="lbl">sec</span></div>
+    </div>
+
+    <p id="hero-human" class="human">—</p>
+    <p id="hero-joke" class="joke">—</p>
+  </section>
+
+  <!-- Shown when there are no events at all -->
+  <section id="empty" class="empty" hidden>
+    <p class="empty-big">Nothing on the calendar.</p>
+    <p class="empty-sub">Which is, frankly, unacceptable. Add the next time you're seeing him.</p>
+    <button id="empty-add" class="btn primary" type="button">Add the first one</button>
+  </section>
+
+  <!-- Meme of the day -->
+  <section id="meme-card" class="meme-card" hidden>
+    <img id="meme-img" class="meme-img" alt="Meme of the day" loading="lazy" decoding="async">
+    <p class="meme-foot">meme of the day &middot; <span id="meme-next">new one tomorrow</span></p>
+  </section>
+
+  <!-- Deadpan stats -->
+  <section id="stats" class="stats" hidden>
+    <div class="stat"><span id="stat-1-v" class="stat-v">—</span><span id="stat-1-l" class="stat-l">—</span></div>
+    <div class="stat"><span id="stat-2-v" class="stat-v">—</span><span id="stat-2-l" class="stat-l">—</span></div>
+  </section>
+
+  <!-- Everything else -->
+  <section id="list-section" class="list-section" hidden>
+    <h3 class="section-title">Everything else</h3>
+    <ul id="list" class="list"></ul>
+  </section>
+
+  <footer class="foot">
+    <p id="foot-note">made with an unreasonable amount of longing</p>
+  </footer>
+
+</div>
+
+<!-- Add / edit sheet -->
+<div id="sheet-backdrop" class="backdrop" hidden></div>
+<div id="sheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden>
+  <div class="sheet-grip"></div>
+  <h3 id="sheet-title" class="sheet-title">New event</h3>
+
+  <form id="event-form" class="form" novalidate>
+    <input type="hidden" id="f-id">
+
+    <label class="field">
+      <span class="field-label">What is it</span>
+      <input id="f-title" type="text" placeholder="Seeing him" maxlength="60" required autocomplete="off">
+    </label>
+
+    <label class="field">
+      <span class="field-label">Emoji</span>
+      <input id="f-emoji" type="text" placeholder="✈️" maxlength="8" autocomplete="off" inputmode="text">
+    </label>
+
+    <div class="field-row">
+      <label class="field">
+        <span class="field-label">Date</span>
+        <input id="f-date" type="date" required>
+      </label>
+      <label class="field">
+        <span class="field-label">Time</span>
+        <input id="f-time" type="time" value="00:00">
+      </label>
+    </div>
+
+    <p id="form-error" class="form-error" hidden></p>
+
+    <div class="sheet-actions">
+      <button type="button" id="f-delete" class="btn danger" hidden>Delete</button>
+      <div class="spacer"></div>
+      <button type="button" id="f-cancel" class="btn">Cancel</button>
+      <button type="submit" class="btn primary">Save</button>
+    </div>
+  </form>
+</div>
+
+<!-- Incoming shared events -->
+<div id="import-backdrop" class="backdrop" hidden></div>
+<div id="import" class="sheet" role="dialog" aria-modal="true" aria-labelledby="import-title" hidden>
+  <div class="sheet-grip"></div>
+  <h3 id="import-title" class="sheet-title">Someone sent you events</h3>
+  <p id="import-body" class="sheet-body">—</p>
+  <ul id="import-list" class="import-list"></ul>
+  <div class="sheet-actions">
+    <button type="button" id="import-ignore" class="btn">Ignore</button>
+    <div class="spacer"></div>
+    <button type="button" id="import-replace" class="btn">Replace mine</button>
+    <button type="button" id="import-merge" class="btn primary">Merge</button>
+  </div>
+</div>
+
+<!-- Zero moment -->
+<div id="celebrate" class="celebrate" hidden>
+  <canvas id="confetti" class="confetti"></canvas>
+  <div class="celebrate-inner">
+    <p id="celebrate-kicker" class="celebrate-kicker">the countdown is over</p>
+    <h2 id="celebrate-title" class="celebrate-title">HE'S HERE</h2>
+    <p id="celebrate-sub" class="celebrate-sub">go, put the phone down</p>
+    <button id="celebrate-close" class="btn primary" type="button">ok ok ok</button>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="jokes.js"></script>
+<script src="memes.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
