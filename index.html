@@ -47,6 +47,35 @@
     <p id="hero-joke" class="joke">—</p>
   </section>
 
+  <!-- Both clocks, driven by whatever timezone each phone reports -->
+  <section id="clocks" class="clocks" hidden>
+    <div class="clock-side" id="clock-me">
+      <span id="tz-me-name" class="clock-who">you</span>
+      <span id="tz-me-time" class="clock-time">--:--</span>
+      <span id="tz-me-place" class="clock-place">—</span>
+    </div>
+    <div class="clock-gap"><span id="tz-gap">—</span></div>
+    <div class="clock-side" id="clock-them">
+      <span id="tz-them-name" class="clock-who">them</span>
+      <span id="tz-them-time" class="clock-time">--:--</span>
+      <span id="tz-them-place" class="clock-place">—</span>
+    </div>
+  </section>
+
+  <!-- Status pills -->
+  <section id="statuses" class="statuses" hidden>
+    <button id="status-me" class="status-pill" type="button">
+      <span class="status-who" id="status-me-who">you</span>
+      <span class="status-text" id="status-me-text">set your status</span>
+      <span class="status-age" id="status-me-age"></span>
+    </button>
+    <div class="status-pill is-them" id="status-them">
+      <span class="status-who" id="status-them-who">them</span>
+      <span class="status-text" id="status-them-text">nothing yet</span>
+      <span class="status-age" id="status-them-age"></span>
+    </div>
+  </section>
+
   <!-- Shown when there are no events at all -->
   <section id="empty" class="empty" hidden>
     <p class="empty-big">Nothing on the calendar.</p>
@@ -73,8 +102,22 @@
     <ul id="list" class="list"></ul>
   </section>
 
+  <!-- Shared checklist -->
+  <section id="todo-section" class="list-section" hidden>
+    <h3 class="section-title">When we're together</h3>
+
+    <form id="todo-form" class="todo-form">
+      <input id="todo-input" type="text" placeholder="add something..." maxlength="120" autocomplete="off">
+      <button type="submit" class="btn primary todo-add">Add</button>
+    </form>
+
+    <ul id="todo-list" class="todo-list"></ul>
+    <p id="todo-empty" class="todo-empty">Nothing on the list yet. What are we doing first?</p>
+  </section>
+
   <footer class="foot">
-    <button id="foot-paste" class="link-btn" type="button">paste a link someone sent you</button>
+    <button id="foot-hello" class="link-btn" type="button" hidden>set up the shared bits</button>
+  <button id="foot-paste" class="link-btn" type="button">paste a link someone sent you</button>
     <p id="foot-note">made with an unreasonable amount of longing</p>
   </footer>
 
@@ -119,6 +162,49 @@
       <button type="submit" class="btn primary">Save</button>
     </div>
   </form>
+</div>
+
+<!-- First run: say who you are so the two phones can tell each other apart -->
+<div id="hello-backdrop" class="backdrop" hidden></div>
+<div id="hello" class="sheet" role="dialog" aria-modal="true" aria-labelledby="hello-title" hidden>
+  <div class="sheet-grip"></div>
+  <h3 id="hello-title" class="sheet-title">Which one are you?</h3>
+  <p class="sheet-body">
+    So the other phone knows whose status is whose. Only needs doing once.
+  </p>
+
+  <form id="hello-form" class="form" novalidate>
+    <label class="field">
+      <span class="field-label">Your name</span>
+      <input id="hello-name" type="text" maxlength="24" placeholder="..." autocomplete="off" required>
+    </label>
+    <p id="hello-error" class="form-error" hidden></p>
+    <div class="sheet-actions">
+      <button type="button" id="hello-skip" class="btn">Not now</button>
+      <div class="spacer"></div>
+      <button type="submit" class="btn primary">That's me</button>
+    </div>
+  </form>
+</div>
+
+<!-- Status picker -->
+<div id="pick-backdrop" class="backdrop" hidden></div>
+<div id="pick" class="sheet" role="dialog" aria-modal="true" aria-labelledby="pick-title" hidden>
+  <div class="sheet-grip"></div>
+  <h3 id="pick-title" class="sheet-title">How are we feeling</h3>
+
+  <form id="pick-form" class="pick-custom">
+    <input id="pick-input" type="text" maxlength="80" placeholder="or type your own..." autocomplete="off">
+    <button type="submit" class="btn primary">Set</button>
+  </form>
+
+  <div id="pick-groups" class="pick-groups"></div>
+
+  <div class="sheet-actions">
+    <button type="button" id="pick-clear" class="btn danger">Clear</button>
+    <div class="spacer"></div>
+    <button type="button" id="pick-cancel" class="btn">Close</button>
+  </div>
 </div>
 
 <!-- Paste a shared link (the only way in on an installed iPhone app) -->
@@ -174,8 +260,16 @@
 
 <div id="toast" class="toast" hidden></div>
 
+<!-- Firebase is optional: if these fail to load, sync.js no-ops and the app
+     still works entirely from local storage. -->
+<script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
 <script src="jokes.js"></script>
 <script src="memes.js"></script>
-<script src="app.js"></script>
+<script src="statuses.js"></script>
+<script src="firebase-config.js"></script>
+<script defer src="sync.js"></script>
+<script defer src="app.js"></script>
 </body>
 </html>

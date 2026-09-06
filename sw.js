@@ -4,7 +4,7 @@
  * and memes, which are big and only fetched as they come up. Downloading the
  * whole meme folder onto his phone up front would be rude. */
 
-const VERSION = 'v3';
+const VERSION = 'v4';
 const SHELL_CACHE = `us-shell-${VERSION}`;
 const MEME_CACHE = `us-memes-${VERSION}`;
 
@@ -15,17 +15,29 @@ const SHELL = [
   'app.js',
   'jokes.js',
   'memes.js',
+  'statuses.js',
+  'sync.js',
+  'firebase-config.js',
   'manifest.webmanifest',
   'assets/icons/icon-180.png',
   'assets/icons/icon-192.png',
   'assets/icons/icon-512.png'
 ];
 
+// Firebase loads from Google's CDN. Cached so a no-signal launch doesn't sit
+// waiting on it; the app works without it either way.
+const VENDOR = [
+  'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js',
+  'https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js'
+];
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(SHELL_CACHE)
       // one missing file shouldn't fail the whole install, so add them individually
-      .then((cache) => Promise.all(SHELL.map((url) => cache.add(url).catch(() => {}))))
+      .then((cache) => Promise.all(
+        SHELL.concat(VENDOR).map((url) => cache.add(url).catch(() => {}))
+      ))
       .then(() => self.skipWaiting())
   );
 });
@@ -60,7 +72,23 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
-  if (url.origin !== location.origin) return;
+
+  // Firebase's own traffic must never be intercepted - it long-polls and
+  // websockets, and a cached reply would break sync outright.
+  if (url.origin !== location.origin) {
+    if (VENDOR.indexOf(url.href) !== -1) {
+      event.respondWith(
+        caches.match(req).then((hit) => hit || fetch(req).then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(SHELL_CACHE).then((cache) => cache.put(req, copy));
+          }
+          return res;
+        }))
+      );
+    }
+    return;
+  }
 
   // memes never change once they have a name, so cache-first is safe and fast
   if (url.pathname.includes('/assets/memes/')) {

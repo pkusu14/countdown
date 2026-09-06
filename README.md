@@ -27,13 +27,49 @@ Edit `jokes.js`. Lines are grouped by how far away the event is (`imminent`,
 `today`, `thisweek`, `soonish`, `faraway`, `eternity`, `past`). Add as many as
 you like to any group. The stat cards at the bottom of `STATS` work the same way.
 
+## Adding statuses
+
+Edit `statuses.js`. It's a plain list grouped by mood, and the groups become
+headings in the picker. Nothing else depends on the wording, so rewrite freely.
+
+## The shared bits
+
+Clocks, statuses, the "when we're together" list and the events themselves all
+sync live through a free Firebase Realtime Database. Each phone publishes its
+own timezone every time the app is opened, so travelling fixes the clocks
+without anyone changing a setting.
+
+All of it is optional. With no database reachable, no room joined, or no
+signal, those sections simply don't appear and the rest of the app carries on
+from local storage.
+
+### The room name is the password
+
+`firebase-config.js` is public - it's in this repo - so the room name is
+deliberately not in it. The database rules allow exactly one room and deny
+everything else, which means the room name is the only thing protecting the
+data.
+
+It travels in the share link as `#k=...` and is then kept in each phone's own
+storage. To set up a new phone, open a link containing the key once.
+
+The rules, which live only in the Firebase console:
+
+```json
+{
+  "rules": {
+    "rooms": {
+      "<room name>": { ".read": true, ".write": true }
+    }
+  }
+}
+```
+
 ## Sharing events
 
-The Share button packs every event into the link itself. Whoever opens it is
-asked whether to merge or replace. Nothing is uploaded anywhere - the data
-rides in the part of the URL after `#`, which browsers never send to a server.
-
-Send a fresh link whenever you change something.
+The Share button packs the room name and every event into the link. Once both
+phones are in the same room, events sync on their own and there's no need to
+send anything again - the link is only for setting a phone up the first time.
 
 ### On an installed iPhone app, paste the link instead of tapping it
 
@@ -43,7 +79,8 @@ Safari are invisible to the installed app.
 
 The way round it: copy the link out of your messages, open the app from its
 icon, and use "paste a link someone sent you" at the bottom of the screen.
-That imports straight into the app's own list.
+That joins the room and imports the events into the app's own storage. It only
+needs doing once - after that the app stays in sync by itself.
 
 Android doesn't have this split - an installed app there shares Chrome's
 storage, so tapping the link works normally.
