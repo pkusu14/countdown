@@ -10,6 +10,5 @@
 window.PUSH_CONFIG = {
   publicKey: 'BK6MDHJWx2CxFT6XUcHq6zZc25poVtxWbXh-SjV87bhYk6vmJd0it3YQKj0vTuxk6wxYcT3oy_us2ZBXqAmOOMc',
 
-  /* e.g. 'https://countdown-push.<your-subdomain>.workers.dev' */
-  worker: ''
+  worker: 'https://countdown-push.pkusu14.workers.dev'
 };
