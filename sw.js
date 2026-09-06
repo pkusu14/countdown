@@ -4,7 +4,7 @@
  * and memes, which are big and only fetched as they come up. Downloading the
  * whole meme folder onto his phone up front would be rude. */
 
-const VERSION = 'v5';
+const VERSION = 'v7';
 const SHELL_CACHE = `us-shell-${VERSION}`;
 const MEME_CACHE = `us-memes-${VERSION}`;
 
@@ -15,6 +15,7 @@ const SHELL = [
   'app.js',
   'jokes.js',
   'memes.js',
+  'measures.js',
   'statuses.js',
   'feelings.js',
   'sync.js',

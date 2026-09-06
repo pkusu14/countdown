@@ -8,6 +8,7 @@
  *   rooms/<room>/members/<seat>  { name, status, statusAt, tz, seenAt }
  *   rooms/<room>/list/<id>       { text, done, by, at }
  *   rooms/<room>/events/<id>     { title, emoji, date }
+ *   rooms/<room>/customs/<id>    { e, t, by, at }
  */
 
 (function () {
@@ -18,7 +19,7 @@
   var seat = null;
   var ready = false;
 
-  var handlers = { members: [], list: [], events: [], inbox: [], state: [] };
+  var handlers = { members: [], list: [], events: [], inbox: [], customs: [], state: [] };
 
   var SEAT_KEY = 'us.seat.v1';
   var ROOM_KEY = 'us.room.v1';
@@ -94,6 +95,10 @@
 
     room.child('events').on('value', function (snap) {
       emit('events', toArray(snap.val()));
+    });
+
+    room.child('customs').on('value', function (snap) {
+      emit('customs', toArray(snap.val()));
     });
 
     /* only today's worth is ever interesting, and it keeps the payload small */
@@ -240,6 +245,24 @@
       .catch(function () {});
   }
 
+  /* Buttons the two of them invent. Shared, so either can make one and both
+     get it. */
+  function addCustom(emoji, text) {
+    if (!ready) return Promise.resolve(false);
+    return room.child('customs').push({
+      e: String(emoji || '').slice(0, 8),
+      t: String(text || '').slice(0, 40),
+      by: seat || '?',
+      at: Date.now()
+    }).then(function () { return true; })
+      .catch(function () { return false; });
+  }
+
+  function removeCustom(id) {
+    if (!ready) return;
+    room.child('customs/' + id).remove().catch(function () {});
+  }
+
   /* First phone to claim a milestone is the one that announces it, so the
      other doesn't send a duplicate. */
   function claimOnce(key) {
@@ -314,6 +337,8 @@
     setPush: setPush,
     clearPush: clearPush,
     addInbox: addInbox,
+    addCustom: addCustom,
+    removeCustom: removeCustom,
     claimOnce: claimOnce,
     addListItem: addListItem,
     toggleListItem: toggleListItem,

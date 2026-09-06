@@ -2,18 +2,19 @@
   'use strict';
 
   var STORE_KEY = 'us.events.v1';
-  var OPENS_KEY = 'us.opens.v1';
   var DONE_KEY = 'us.celebrated.v1';
+  var NOTIFY_KEY = 'us.notifyask.v1';
   var SECOND = 1000, MIN = 60000, HOUR = 3600000, DAY = 86400000;
 
   var $ = function (id) { return document.getElementById(id); };
 
   var events = [];
   var heroId = null;
+  /* set once a tab is tapped, so flipping to another countdown sticks instead
+     of snapping back to the soonest one on the next redraw */
+  var pickedId = null;
   var celebrated = [];
   var lastDayIndex = null;
-  var sessionSeed = Math.floor(Math.random() * 1e9);
-  var opens = 1;
 
   var members = {};
   var todos = [];
@@ -71,17 +72,6 @@
     try { localStorage.setItem(DONE_KEY, JSON.stringify(celebrated)); } catch (e) {}
   }
 
-  function countOpen() {
-    var today = localDayIndex();
-    try {
-      var rec = JSON.parse(localStorage.getItem(OPENS_KEY)) || {};
-      opens = rec.day === today ? (rec.n || 0) + 1 : 1;
-      localStorage.setItem(OPENS_KEY, JSON.stringify({ day: today, n: opens }));
-    } catch (e) {
-      opens = 1;
-    }
-  }
-
   /* ---------------- time ---------------- */
 
   /* Days since epoch in the viewer's own timezone, so the meme flips at their
@@ -130,12 +120,11 @@
     sort();
 
     var now = Date.now();
-    var hero = pickHero(now);
+    var hero = byId(pickedId) || pickHero(now);
     heroId = hero ? hero.id : null;
 
     $('empty').hidden = events.length > 0;
     $('hero').hidden = !hero;
-    $('stats').hidden = !hero;
 
     if (hero) {
       $('hero-title').textContent = (hero.emoji ? hero.emoji + '  ' : '') + hero.title;
@@ -144,6 +133,7 @@
       $('hero').classList.toggle('is-past', isPast);
     }
 
+    renderTabs();
     renderList();
     renderMeme();
     tick();
@@ -162,21 +152,44 @@
     return justHappened || upcoming || events[0] || null;
   }
 
+  /* One tab per event, in the same order as the list below. Only worth
+     showing once there is more than one thing to flip between. */
+  function renderTabs() {
+    var bar = $('hero-tabs');
+    bar.textContent = '';
+    bar.hidden = events.length < 2;
+    if (bar.hidden) return;
+
+    events.forEach(function (e) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'hero-tab' + (e.id === heroId ? ' is-on' : '');
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', e.id === heroId ? 'true' : 'false');
+      b.textContent = (e.emoji ? e.emoji + ' ' : '') + e.title;
+      b.addEventListener('click', function () {
+        pickedId = e.id;
+        render();
+        b.scrollIntoView({ block: 'nearest', inline: 'center' });
+      });
+      bar.appendChild(b);
+    });
+  }
+
   function renderList() {
     var list = $('list');
-    var rest = events.filter(function (e) { return e.id !== heroId; });
 
     list.textContent = '';
-    $('list-section').hidden = rest.length === 0;
+    $('list-section').hidden = events.length === 0;
 
-    rest.forEach(function (e) {
+    events.forEach(function (e) {
       var ts = Date.parse(e.date);
       var past = ts < Date.now();
 
       var li = document.createElement('li');
       var row = document.createElement('button');
       row.type = 'button';
-      row.className = 'row' + (past ? ' is-past' : '');
+      row.className = 'row' + (past ? ' is-past' : '') + (e.id === heroId ? ' is-on' : '');
       row.dataset.id = e.id;
 
       var emoji = document.createElement('span');
@@ -241,26 +254,54 @@
   }
 
   /* Same order on both phones: a fixed-seed shuffle, not Math.random. */
-  function shuffled(arr) {
+  function shuffled(arr, seed) {
     var out = arr.slice();
-    var seed = 1337;
+    var s = seed || 1337;
     for (var i = out.length - 1; i > 0; i--) {
-      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-      var j = seed % (i + 1);
+      s = (s * 1103515245 + 12345) & 0x7fffffff;
+      var j = s % (i + 1);
       var t = out[i]; out[i] = out[j]; out[j] = t;
     }
     return out;
   }
 
-  function renderStats(ms) {
-    var stats = window.JOKES.statsFor(
-      { ms: Math.abs(ms), days: Math.floor(Math.abs(ms) / DAY), opens: opens },
-      localDayIndex()
-    );
-    $('stat-1-v').textContent = stats[0].value;
-    $('stat-1-l').textContent = stats[0].label;
-    $('stat-2-v').textContent = stats[1].value;
-    $('stat-2-l').textContent = stats[1].label;
+  /* ---------------- the absurd units ---------------- */
+
+  function renderMeasures(ms) {
+    var picks = pickMeasures(Math.abs(ms));
+    var box = $('measures');
+
+    box.hidden = picks.length === 0;
+    if (box.hidden) return;
+
+    for (var i = 0; i < 2; i++) {
+      var pick = picks[i];
+      box.children[i].hidden = !pick;
+      if (!pick) continue;
+
+      $('measure-' + (i + 1) + '-v').textContent = pick.count.toLocaleString();
+      $('measure-' + (i + 1) + '-l').textContent = pick.unit;
+    }
+  }
+
+  /* Two a day, taken from the date so both phones show the same pair. One
+     fixed order walked two steps a day, which is what guarantees the gap: a
+     unit can't come back until the whole list has been through, and there are
+     enough of them for that to be over a month. Anything that rounds down to
+     zero on a short countdown gets stepped over rather than shown. */
+  function pickMeasures(ms) {
+    var order = shuffled(window.MEASURES || []);
+    if (order.length < 2) return [];
+
+    var start = (localDayIndex() * 2) % order.length;
+
+    var out = [];
+    for (var i = 0; i < order.length && out.length < 2; i++) {
+      var item = order[(start + i) % order.length];
+      var count = Math.round(ms / (item.s * 1000));
+      if (count >= 1) out.push({ count: count, unit: item.unit });
+    }
+    return out;
   }
 
   /* ---------------- the tick ---------------- */
@@ -268,12 +309,9 @@
   function tick() {
     var now = Date.now();
 
-    /* midnight rolled over: new meme, new stats */
+    /* midnight rolled over: new meme, new units */
     var today = localDayIndex(now);
-    if (lastDayIndex !== null && today !== lastDayIndex) {
-      renderMeme();
-      sessionSeed = Math.floor(Math.random() * 1e9);
-    }
+    if (lastDayIndex !== null && today !== lastDayIndex) renderMeme();
     lastDayIndex = today;
 
     document.querySelectorAll('[data-away]').forEach(function (el) {
@@ -297,14 +335,12 @@
     $('m').textContent = pad(p.m);
     $('s').textContent = pad(p.s);
 
-    $('hero-human').textContent = window.JOKES.humanize(ms, isPast);
-    $('hero-joke').textContent = window.JOKES.pickLine(ms, sessionSeed);
     $('hero').classList.toggle('is-past', isPast);
     $('hero-eyebrow').textContent = isPast ? 'it has been' : 'counting down to';
 
     document.title = (isPast ? '' : compact(ms) + ' \u00b7 ') + hero.title;
 
-    renderStats(ms);
+    renderMeasures(ms);
     checkCelebrations(now);
     checkMilestones(now);
 
@@ -463,16 +499,17 @@
   }
 
   function shareLink() {
-    if (!events.length) return toast('Nothing to share yet');
-
-    /* the room name rides along so he joins the same room without typing it,
-       and so it never has to live in the source */
+    /* Events already sync on their own. This link is only for putting a new
+       phone in the same room - so it still works with an empty calendar. */
     var key = window.SYNC ? SYNC.roomId() : '';
+    if (!key && !events.length) return toast('Nothing to share yet');
+
     var url = location.origin + location.pathname + '#'
-      + (key ? 'k=' + key + '&' : '') + 'e=' + encodeEvents(events);
+      + (key ? 'k=' + key : '')
+      + (events.length ? (key ? '&' : '') + 'e=' + encodeEvents(events) : '');
 
     if (navigator.share) {
-      navigator.share({ title: 'our countdown', text: 'open this and add it to your home screen', url: url })
+      navigator.share({ title: 'Hari & Pranavi', text: 'open this and add it to your home screen', url: url })
         .catch(function () { copy(url); });
     } else {
       copy(url);
@@ -688,6 +725,18 @@
     $('status-them-age').textContent = ago(them.statusAt);
   }
 
+  /* Both names once both phones have said who they are. Sorted rather than
+     me-first, so the header reads identically on each of them. */
+  function renderBrand() {
+    var names = ['a', 'b']
+      .map(function (s) { return String((members[s] || {}).name || '').trim(); })
+      .filter(Boolean)
+      .sort(function (x, y) { return x.localeCompare(y); });
+
+    if (names.length < 2) return;
+    $('brand').textContent = names.join(' & ');
+  }
+
   function ago(ts) {
     if (!ts) return '';
     var diff = Date.now() - ts;
@@ -755,6 +804,14 @@
 
   var mood = 0;
   var inbox = [];
+  var customs = [];
+
+  /* The ones they invent come first, because those are the ones that get
+     used. Everything after is the built-in list. */
+  function moodGroups() {
+    return [{ group: 'custom', mine: true, items: customs }]
+      .concat(window.FEELINGS || []);
+  }
 
   function renderFeelings() {
     var section = $('feelings');
@@ -774,7 +831,7 @@
   function buildMoodTabs() {
     var tabs = $('mood-tabs');
 
-    window.FEELINGS.forEach(function (group, i) {
+    moodGroups().forEach(function (group, i) {
       var b = document.createElement('button');
       b.type = 'button';
       b.className = 'mood-tab' + (i === mood ? ' is-on' : '');
@@ -794,27 +851,106 @@
     var grid = $('mood-grid');
     grid.textContent = '';
 
-    var group = window.FEELINGS[mood];
+    var group = moodGroups()[mood];
     if (!group) return;
 
     group.items.forEach(function (item) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'feel-btn';
-
-      var e = document.createElement('span');
-      e.className = 'feel-emoji';
-      e.textContent = item.e;
-
-      var t = document.createElement('span');
-      t.className = 'feel-text';
-      t.textContent = item.t;
-
-      b.appendChild(e);
-      b.appendChild(t);
-      b.addEventListener('click', function () { throwFeeling(item, b); });
-      grid.appendChild(b);
+      grid.appendChild(feelButton(item));
     });
+
+    if (!group.mine) return;
+
+    /* the way in to making one, sat at the end of your own row */
+    var add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'feel-btn is-add';
+    add.textContent = group.items.length ? '+ another' : '+ make one';
+    add.addEventListener('click', openFeelMaker);
+    grid.appendChild(add);
+  }
+
+  function feelButton(item) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'feel-btn';
+
+    var e = document.createElement('span');
+    e.className = 'feel-emoji';
+    e.textContent = item.e;
+
+    var t = document.createElement('span');
+    t.className = 'feel-text';
+    t.textContent = item.t;
+
+    b.appendChild(e);
+    b.appendChild(t);
+    b.addEventListener('click', function () { throwFeeling(item, b); });
+    return b;
+  }
+
+  /* ---------------- feelings you make yourself ---------------- */
+
+  function openFeelMaker() {
+    $('feel-emoji').value = '';
+    $('feel-text').value = '';
+    $('feel-error').hidden = true;
+    renderMyFeelings();
+    $('feel-backdrop').hidden = false;
+    $('feel').hidden = false;
+    setTimeout(function () { $('feel-emoji').focus(); }, 60);
+  }
+
+  function closeFeelMaker() {
+    $('feel').hidden = true;
+    $('feel-backdrop').hidden = true;
+  }
+
+  function renderMyFeelings() {
+    var ul = $('feel-mine');
+    ul.textContent = '';
+
+    customs.forEach(function (item) {
+      var li = document.createElement('li');
+      li.className = 'feel-mine-row';
+
+      var label = document.createElement('span');
+      label.textContent = item.e + '  ' + item.t;
+
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'todo-del';
+      del.setAttribute('aria-label', 'Remove');
+      del.textContent = '\u00d7';
+      del.addEventListener('click', function () { SYNC.removeCustom(item.id); });
+
+      li.appendChild(label);
+      li.appendChild(del);
+      ul.appendChild(li);
+    });
+  }
+
+  function saveFeeling() {
+    var emoji = $('feel-emoji').value.trim();
+    var text = $('feel-text').value.trim();
+
+    /* no strict grapheme count here - flags and skin tones are several code
+       points each - just enough to catch someone typing a word in the box */
+    if (!emoji || /[A-Za-z0-9\s]/.test(emoji)) return feelError('Emoji goes in the first box.');
+    if (!text) return feelError('And what should it say?');
+
+    SYNC.addCustom(emoji, text).then(function (ok) {
+      if (!ok) return feelError("Couldn't save that - check your signal.");
+      $('feel-emoji').value = '';
+      $('feel-text').value = '';
+      $('feel-error').hidden = true;
+      $('feel-emoji').focus();
+    });
+  }
+
+  function feelError(msg) {
+    var el = $('feel-error');
+    el.textContent = msg;
+    el.hidden = false;
   }
 
   function throwFeeling(item, button) {
@@ -881,19 +1017,17 @@
   /* ---------------- notification permission ---------------- */
 
   function renderPushNote() {
-    var btn = $('push-enable');
     var note = $('push-note');
+    if (!note) return;
 
-    if (!window.PUSHER) { btn.hidden = true; note.hidden = true; return; }
+    if (!window.PUSHER) { note.hidden = true; return; }
 
     var state = PUSHER.state();
+    /* once they're on, the prompt is gone. a quiet note stays only when
+       something is actually wrong. */
+    note.hidden = state === 'on' || state === 'ready' || state === 'off';
 
-    btn.hidden = state !== 'ready';
-    note.hidden = state === 'on' || state === 'ready';
-
-    if (state === 'off') {
-      note.textContent = 'Notifications are not set up yet - these still show up in the app.';
-    } else if (state === 'needs-install') {
+    if (state === 'needs-install') {
       note.textContent = 'Add this to your Home Screen and open it from there to get notifications. iPhones will not send them from a Safari tab.';
     } else if (state === 'unsupported') {
       note.textContent = "This browser can't do notifications. Everything still lands in the app.";
@@ -905,12 +1039,41 @@
   function askForPush() {
     PUSHER.enable().then(function (result) {
       renderPushNote();
+      if (result === 'on') closeNotifyAsk();
 
       if (result === 'on') return toast('Notifications on');
       if (result === 'blocked') return toast('You said no - change it in settings');
       if (result === 'needs-install') return toast('Add to Home Screen first');
       if (result === 'error') return toast("Couldn't turn those on");
     });
+  }
+
+  /* Asked up front rather than left as a link nobody notices, but only when
+     tapping it would actually do something, and never again once it has. */
+  function maybeAskNotify() {
+    if (!window.PUSHER || PUSHER.state() !== 'ready') return;
+    if (Date.now() < snoozedUntil()) return;
+
+    /* whatever else is on screen - first run, an incoming link - matters more */
+    if (!$('hello').hidden || !$('import').hidden || !$('celebrate').hidden) return;
+
+    $('notify-backdrop').hidden = false;
+    $('notify').hidden = false;
+  }
+
+  function snoozedUntil() {
+    try { return Number(localStorage.getItem(NOTIFY_KEY)) || 0; }
+    catch (e) { return Infinity; }
+  }
+
+  function snoozeNotify() {
+    try { localStorage.setItem(NOTIFY_KEY, String(Date.now() + 7 * DAY)); } catch (e) {}
+    closeNotifyAsk();
+  }
+
+  function closeNotifyAsk() {
+    $('notify').hidden = true;
+    $('notify-backdrop').hidden = true;
   }
 
   /* ---------------- shared checklist ---------------- */
@@ -1043,6 +1206,7 @@
   }
 
   function renderSyncBits() {
+    renderBrand();
     renderClocks();
     renderStatuses();
     renderTodos();
@@ -1295,8 +1459,16 @@
     on('hello-form', 'submit', submitHello);
     on('hello-skip', 'click', closeHello);
     on('foot-hello', 'click', openHello);
-    on('push-enable', 'click', askForPush);
     on('todo-form', 'submit', submitTodo);
+
+    on('notify-yes', 'click', askForPush);
+    on('notify-later', 'click', snoozeNotify);
+    on('notify-backdrop', 'click', snoozeNotify);
+
+    on('feel-cancel', 'click', closeFeelMaker);
+    on('feel-backdrop', 'click', closeFeelMaker);
+    on('feel-save', 'click', saveFeeling);
+    on('feel-form', 'submit', function (ev) { ev.preventDefault(); saveFeeling(); });
 
     on('import-ignore', 'click', closeImport);
     on('import-backdrop', 'click', closeImport);
@@ -1315,7 +1487,8 @@
     });
 
     document.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Escape') { closeSheet(); closeImport(); closePaste(); closePicker(); }
+      if (ev.key !== 'Escape') return;
+      closeSheet(); closeImport(); closePaste(); closePicker(); closeFeelMaker();
     });
 
     /* phones freeze timers in the background - resync on return */
@@ -1384,6 +1557,12 @@
       renderThrows();
     });
 
+    SYNC.on('customs', function (items) {
+      customs = (items || []).sort(function (x, y) { return (x.at || 0) - (y.at || 0); });
+      if (mood === 0) renderMoodGrid();
+      if (!$('feel').hidden) renderMyFeelings();
+    });
+
     SYNC.on('events', function (remote) {
       /* First payload decides which way things flow: if the room is empty but
          this phone has events, seed the room from here. Otherwise the room
@@ -1432,7 +1611,6 @@
   }
 
   function init() {
-    countOpen();
     celebrated = celebratedIds();
     load();
     wire();
@@ -1442,6 +1620,9 @@
     setInterval(tick, SECOND);
     startSync();
     registerSW();
+
+    /* after the first paint, so it lands on the app rather than a blank page */
+    setTimeout(maybeAskNotify, 1200);
   }
 
   if (document.readyState === 'loading') {

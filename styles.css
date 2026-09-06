@@ -58,12 +58,12 @@ body {
 
 .brand {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 
-.brand .dot { color: var(--accent); }
+.brand .amp { color: var(--accent); }
 
 .topbar-actions { display: flex; gap: 8px; }
 
@@ -91,6 +91,41 @@ body {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 28px;
+}
+
+/* ---------- countdown tabs ---------- */
+.hero-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.hero-tabs::-webkit-scrollbar { display: none; }
+
+.hero-tab {
+  flex: none;
+  max-width: 46vw;
+  appearance: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hero-tab.is-on {
+  color: var(--text);
+  background: var(--accent-soft);
+  border-color: var(--accent);
 }
 
 .eyebrow {
@@ -145,17 +180,34 @@ body {
 
 .hero.is-past .num { color: var(--accent); }
 
-.human {
-  margin: 18px 0 0;
-  font-size: 15px;
-  font-weight: 550;
-  color: var(--text);
+/* ---------- the absurd units ---------- */
+.measures {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
-.joke {
-  margin: 6px 0 0;
-  font-size: 14px;
-  line-height: 1.5;
+.measure {
+  padding: 14px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.measure-v {
+  display: block;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.measure-l {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.35;
   color: var(--muted);
 }
 
@@ -323,16 +375,6 @@ body {
 /* ---------- feelings ---------- */
 .feelings { margin-top: 26px; }
 
-.feelings-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.feelings-head .section-title { margin-bottom: 0; }
-.feelings-head .link-btn { padding: 0; flex: none; }
-
 .push-note {
   margin: 8px 2px 0;
   font-size: 12px;
@@ -404,6 +446,38 @@ body {
 
 .feel-emoji { flex: none; font-size: 19px; line-height: 1; }
 .feel-text { min-width: 0; line-height: 1.25; }
+
+.feel-btn.is-add {
+  justify-content: center;
+  color: var(--muted);
+  background: none;
+  border-style: dashed;
+}
+
+/* ---------- making your own ---------- */
+.feel-form { display: flex; gap: 10px; align-items: flex-end; margin-top: 14px; }
+.feel-form .field { flex: 1; min-width: 0; }
+.feel-emoji-field { flex: 0 0 84px; }
+
+.feel-mine {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.feel-mine-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+
+.feel-mine-row span { flex: 1; min-width: 0; }
 
 .throws {
   list-style: none;
@@ -535,37 +609,6 @@ body {
   border-top: 1px solid var(--line);
 }
 
-/* ---------- stats ---------- */
-.stats {
-  margin-top: 14px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.stat {
-  padding: 16px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-}
-
-.stat-v {
-  display: block;
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
-}
-
-.stat-l {
-  display: block;
-  margin-top: 4px;
-  font-size: 12px;
-  line-height: 1.35;
-  color: var(--muted);
-}
-
 /* ---------- list ---------- */
 .list-section { margin-top: 28px; }
 
@@ -624,9 +667,13 @@ body {
 
 .row.is-past .row-away { color: var(--muted); }
 
+/* whichever one the big countdown is showing */
+.row.is-on { border-color: var(--accent); }
+
 /* ---------- footer ---------- */
 .foot { margin-top: 34px; text-align: center; }
 .foot p { margin: 12px 0 0; font-size: 12px; color: var(--muted); }
+.foot .link-btn { display: block; margin: 0 auto; }
 
 .link-btn {
   appearance: none;

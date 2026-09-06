@@ -24,14 +24,16 @@
 <div class="wrap">
 
   <header class="topbar">
-    <h1 class="brand">us<span class="dot">.</span></h1>
+    <h1 id="brand" class="brand">Hari <span class="amp">&amp;</span> Pranavi</h1>
     <div class="topbar-actions">
-      <button id="share-btn" class="icon-btn" type="button" title="Send these to him">Share</button>
       <button id="add-btn" class="icon-btn primary" type="button" title="Add an event">Add</button>
     </div>
   </header>
 
-  <!-- Hero: the soonest upcoming event -->
+  <!-- One tab per countdown -->
+  <div id="hero-tabs" class="hero-tabs" role="tablist" hidden></div>
+
+  <!-- Hero: whichever countdown is selected -->
   <section id="hero" class="hero" hidden>
     <p id="hero-eyebrow" class="eyebrow">counting down to</p>
     <h2 id="hero-title" class="hero-title">—</h2>
@@ -43,8 +45,10 @@
       <div class="unit"><span id="s" class="num">0</span><span class="lbl">sec</span></div>
     </div>
 
-    <p id="hero-human" class="human">—</p>
-    <p id="hero-joke" class="joke">—</p>
+    <div id="measures" class="measures">
+      <div class="measure"><span id="measure-1-v" class="measure-v">—</span><span id="measure-1-l" class="measure-l">—</span></div>
+      <div class="measure"><span id="measure-2-v" class="measure-v">—</span><span id="measure-2-l" class="measure-l">—</span></div>
+    </div>
   </section>
 
   <!-- Both clocks, driven by whatever timezone each phone reports -->
@@ -90,25 +94,15 @@
     <p class="meme-foot">meme of the day &middot; <span id="meme-next">new one tomorrow</span></p>
   </section>
 
-  <!-- Deadpan stats -->
-  <section id="stats" class="stats" hidden>
-    <div class="stat"><span id="stat-1-v" class="stat-v">—</span><span id="stat-1-l" class="stat-l">—</span></div>
-    <div class="stat"><span id="stat-2-v" class="stat-v">—</span><span id="stat-2-l" class="stat-l">—</span></div>
-  </section>
-
   <!-- Everything else -->
   <section id="list-section" class="list-section" hidden>
-    <h3 class="section-title">Everything else</h3>
+    <h3 class="section-title">Every date</h3>
     <ul id="list" class="list"></ul>
   </section>
 
   <!-- Feelings: tap to land on his phone -->
   <section id="feelings" class="feelings" hidden>
-    <div class="feelings-head">
-      <h3 class="section-title">Throw something at him</h3>
-      <button id="push-enable" class="link-btn" type="button" hidden>turn on notifications</button>
-    </div>
-
+    <h3 class="section-title">Throw something</h3>
     <p id="push-note" class="push-note" hidden></p>
 
     <div class="mood-tabs" id="mood-tabs" role="tablist"></div>
@@ -132,7 +126,8 @@
 
   <footer class="foot">
     <button id="foot-hello" class="link-btn" type="button" hidden>set up the shared bits</button>
-  <button id="foot-paste" class="link-btn" type="button">paste a link someone sent you</button>
+    <button id="share-btn" class="link-btn" type="button">copy the setup link for a new phone</button>
+    <button id="foot-paste" class="link-btn" type="button">paste a link someone sent you</button>
     <p id="foot-note">made with an unreasonable amount of longing</p>
   </footer>
 
@@ -222,6 +217,51 @@
   </div>
 </div>
 
+<!-- Make your own thing to throw -->
+<div id="feel-backdrop" class="backdrop" hidden></div>
+<div id="feel" class="sheet" role="dialog" aria-modal="true" aria-labelledby="feel-title" hidden>
+  <div class="sheet-grip"></div>
+  <h3 id="feel-title" class="sheet-title">Make your own</h3>
+  <p class="sheet-body">One emoji, then whatever it says. Both phones get it.</p>
+
+  <form id="feel-form" class="feel-form" novalidate>
+    <label class="field feel-emoji-field">
+      <span class="field-label">Emoji</span>
+      <input id="feel-emoji" type="text" maxlength="8" placeholder="🫠" autocomplete="off" required>
+    </label>
+    <label class="field">
+      <span class="field-label">What it says</span>
+      <input id="feel-text" type="text" maxlength="40" placeholder="thinking about you again" autocomplete="off" required>
+    </label>
+  </form>
+
+  <p id="feel-error" class="form-error" hidden></p>
+
+  <ul id="feel-mine" class="feel-mine"></ul>
+
+  <div class="sheet-actions">
+    <button type="button" id="feel-cancel" class="btn">Close</button>
+    <div class="spacer"></div>
+    <button type="button" id="feel-save" class="btn primary">Add it</button>
+  </div>
+</div>
+
+<!-- Nudge to turn notifications on, shown once per install until granted -->
+<div id="notify-backdrop" class="backdrop" hidden></div>
+<div id="notify" class="sheet" role="dialog" aria-modal="true" aria-labelledby="notify-title" hidden>
+  <div class="sheet-grip"></div>
+  <h3 id="notify-title" class="sheet-title">Let things land on your phone</h3>
+  <p id="notify-body" class="sheet-body">
+    Statuses, list additions and anything thrown at you turn up on your lock
+    screen. Without this you only see them when the app is open.
+  </p>
+  <div class="sheet-actions">
+    <button type="button" id="notify-later" class="btn">Not now</button>
+    <div class="spacer"></div>
+    <button type="button" id="notify-yes" class="btn primary">Turn them on</button>
+  </div>
+</div>
+
 <!-- Paste a shared link (the only way in on an installed iPhone app) -->
 <div id="paste-backdrop" class="backdrop" hidden></div>
 <div id="paste" class="sheet" role="dialog" aria-modal="true" aria-labelledby="paste-title" hidden>
@@ -282,6 +322,7 @@
 
 <script src="jokes.js"></script>
 <script src="memes.js"></script>
+<script src="measures.js"></script>
 <script src="statuses.js"></script>
 <script src="feelings.js"></script>
 <script src="firebase-config.js"></script>
