@@ -4,7 +4,7 @@
  * and memes, which are big and only fetched as they come up. Downloading the
  * whole meme folder onto his phone up front would be rude. */
 
-const VERSION = 'v4';
+const VERSION = 'v5';
 const SHELL_CACHE = `us-shell-${VERSION}`;
 const MEME_CACHE = `us-memes-${VERSION}`;
 
@@ -16,8 +16,11 @@ const SHELL = [
   'jokes.js',
   'memes.js',
   'statuses.js',
+  'feelings.js',
   'sync.js',
+  'push.js',
   'firebase-config.js',
+  'push-config.js',
   'manifest.webmanifest',
   'assets/icons/icon-180.png',
   'assets/icons/icon-192.png',
@@ -64,6 +67,42 @@ self.addEventListener('message', (event) => {
     caches.open(MEME_CACHE).then((cache) => Promise.all(
       data.urls.map((url) => cache.match(url).then((hit) => hit || cache.add(url).catch(() => {})))
     ))
+  );
+});
+
+/* An incoming notification. iOS revokes the subscription of any app that
+   receives a push and doesn't show something, so every path here ends in a
+   visible notification - even a malformed one. */
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) {}
+
+  const title = data.title || 'us.';
+  const options = {
+    body: data.message || '',
+    tag: data.tag || 'us',
+    // feelings should stack up; status and list updates replace each other
+    renotify: data.tag === 'feeling',
+    silent: !!data.silent,
+    icon: 'assets/icons/icon-192.png',
+    badge: 'assets/icons/icon-192.png',
+    data: { at: Date.now() }
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((list) => {
+        for (const client of list) {
+          if ('focus' in client) return client.focus();
+        }
+        return self.clients.openWindow('./');
+      })
   );
 });
 

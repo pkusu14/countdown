@@ -102,6 +102,21 @@
     <ul id="list" class="list"></ul>
   </section>
 
+  <!-- Feelings: tap to land on his phone -->
+  <section id="feelings" class="feelings" hidden>
+    <div class="feelings-head">
+      <h3 class="section-title">Throw something at him</h3>
+      <button id="push-enable" class="link-btn" type="button" hidden>turn on notifications</button>
+    </div>
+
+    <p id="push-note" class="push-note" hidden></p>
+
+    <div class="mood-tabs" id="mood-tabs" role="tablist"></div>
+    <div class="mood-grid" id="mood-grid"></div>
+
+    <ul id="throws" class="throws"></ul>
+  </section>
+
   <!-- Shared checklist -->
   <section id="todo-section" class="list-section" hidden>
     <h3 class="section-title">When we're together</h3>
@@ -268,8 +283,11 @@
 <script src="jokes.js"></script>
 <script src="memes.js"></script>
 <script src="statuses.js"></script>
+<script src="feelings.js"></script>
 <script src="firebase-config.js"></script>
+<script src="push-config.js"></script>
 <script defer src="sync.js"></script>
+<script defer src="push.js"></script>
 <script defer src="app.js"></script>
 </body>
 </html>

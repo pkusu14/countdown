@@ -1,0 +1,12 @@
+name = "countdown-push"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+[vars]
+VAPID_PUBLIC = "BK6MDHJWx2CxFT6XUcHq6zZc25poVtxWbXh-SjV87bhYk6vmJd0it3YQKj0vTuxk6wxYcT3oy_us2ZBXqAmOOMc"
+DB = "https://countdown-6b46e-default-rtdb.europe-west1.firebasedatabase.app"
+CONTACT = "mailto:countdown@example.com"
+
+# Secrets, set with `npx wrangler secret put <NAME>`:
+#   VAPID_PRIVATE   base64 PKCS8 private key
+#   ROOM            the room name, kept out of the repo

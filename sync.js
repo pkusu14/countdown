@@ -18,7 +18,7 @@
   var seat = null;
   var ready = false;
 
-  var handlers = { members: [], list: [], events: [], state: [] };
+  var handlers = { members: [], list: [], events: [], inbox: [], state: [] };
 
   var SEAT_KEY = 'us.seat.v1';
   var ROOM_KEY = 'us.room.v1';
@@ -94,6 +94,11 @@
 
     room.child('events').on('value', function (snap) {
       emit('events', toArray(snap.val()));
+    });
+
+    /* only today's worth is ever interesting, and it keeps the payload small */
+    room.child('inbox').orderByKey().limitToLast(40).on('value', function (snap) {
+      emit('inbox', toArray(snap.val()));
     });
 
     if (seat) touch();
@@ -199,6 +204,54 @@
     }).catch(function () {});
   }
 
+  /* ---------------- push ---------------- */
+
+  function setPush(subscription) {
+    if (!ready || !seat) return Promise.resolve(false);
+    return room.child('members/' + seat + '/push').set(subscription)
+      .then(function () { return true; })
+      .catch(function () { return false; });
+  }
+
+  function clearPush() {
+    if (!ready || !seat) return;
+    room.child('members/' + seat + '/push').remove().catch(function () {});
+  }
+
+  /* ---------------- the back and forth ---------------- */
+
+  function addInbox(item) {
+    if (!ready || !seat) return;
+
+    item.by = seat;
+    item.at = Date.now();
+    room.child('inbox').push(item).catch(function () {});
+
+    /* push ids sort chronologically, so keeping the last 40 by key needs no
+       index and no timestamp query */
+    room.child('inbox').orderByKey().once('value')
+      .then(function (snap) {
+        var extra = snap.numChildren() - 40;
+        if (extra <= 0) return;
+        snap.forEach(function (child) {
+          if (extra-- > 0) child.ref.remove();
+        });
+      })
+      .catch(function () {});
+  }
+
+  /* First phone to claim a milestone is the one that announces it, so the
+     other doesn't send a duplicate. */
+  function claimOnce(key) {
+    if (!ready) return Promise.resolve(false);
+
+    return room.child('claims/' + key).transaction(function (current) {
+      return current === null ? Date.now() : undefined;
+    }).then(function (res) {
+      return !!res.committed;
+    }).catch(function () { return false; });
+  }
+
   /* ---------------- the shared list ---------------- */
 
   function addListItem(text) {
@@ -258,6 +311,10 @@
     touch: touch,
     setStatus: setStatus,
     setName: setName,
+    setPush: setPush,
+    clearPush: clearPush,
+    addInbox: addInbox,
+    claimOnce: claimOnce,
     addListItem: addListItem,
     toggleListItem: toggleListItem,
     removeListItem: removeListItem,

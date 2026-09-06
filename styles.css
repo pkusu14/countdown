@@ -320,6 +320,114 @@ body {
 
 .pick-opt:active { transform: scale(0.97); }
 
+/* ---------- feelings ---------- */
+.feelings { margin-top: 26px; }
+
+.feelings-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.feelings-head .section-title { margin-bottom: 0; }
+.feelings-head .link-btn { padding: 0; flex: none; }
+
+.push-note {
+  margin: 8px 2px 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.mood-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 12px 0 10px;
+  overflow-x: auto;
+  /* let the row bleed to the screen edge rather than clipping mid-tab */
+  scrollbar-width: none;
+}
+
+.mood-tabs::-webkit-scrollbar { display: none; }
+
+.mood-tab {
+  flex: none;
+  appearance: none;
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+.mood-tab.is-on {
+  color: var(--text);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.mood-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+@media (min-width: 460px) {
+  .mood-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+.feel-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 12px;
+  cursor: pointer;
+  transition: transform 90ms ease, background 140ms ease;
+}
+
+.feel-btn:active { transform: scale(0.96); background: var(--accent-soft); }
+
+/* a quick flash so rapid taps still feel like they registered */
+.feel-btn.is-sent { background: var(--accent-soft); border-color: var(--accent); }
+
+.feel-emoji { flex: none; font-size: 19px; line-height: 1; }
+.feel-text { min-width: 0; line-height: 1.25; }
+
+.throws {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.throw-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 3px 2px;
+}
+
+.throw-row.is-mine { opacity: 0.6; }
+.throw-who { flex: none; font-weight: 600; color: var(--text); }
+.throw-text { flex: 1; min-width: 0; }
+.throw-when { flex: none; }
+
 /* ---------- shared checklist ---------- */
 .todo-form { display: flex; gap: 8px; margin-bottom: 10px; }
 

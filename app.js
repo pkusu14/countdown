@@ -738,6 +738,179 @@
     if (window.SYNC) SYNC.setStatus(text);
     closePicker();
     toast(text ? 'Status set' : 'Status cleared');
+
+    if (text && window.PUSHER) {
+      var me = members[seatOf('me')] || {};
+      PUSHER.notify({
+        title: me.name || 'us.',
+        message: 'is now ' + text,
+        /* one status per person on the lock screen, not a pile of them */
+        tag: 'status-' + seatOf('me'),
+        silent: partnerAsleep()
+      });
+    }
+  }
+
+  /* ---------------- feelings ---------------- */
+
+  var mood = 0;
+  var inbox = [];
+
+  function renderFeelings() {
+    var section = $('feelings');
+
+    if (!window.SYNC || !SYNC.isReady() || !SYNC.hasSeat() || !window.FEELINGS) {
+      section.hidden = true;
+      return;
+    }
+    section.hidden = false;
+
+    if (!$('mood-tabs').childNodes.length) buildMoodTabs();
+    renderMoodGrid();
+    renderPushNote();
+    renderThrows();
+  }
+
+  function buildMoodTabs() {
+    var tabs = $('mood-tabs');
+
+    window.FEELINGS.forEach(function (group, i) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mood-tab' + (i === mood ? ' is-on' : '');
+      b.textContent = group.group;
+      b.addEventListener('click', function () {
+        mood = i;
+        [].forEach.call(tabs.children, function (el, j) {
+          el.classList.toggle('is-on', j === i);
+        });
+        renderMoodGrid();
+      });
+      tabs.appendChild(b);
+    });
+  }
+
+  function renderMoodGrid() {
+    var grid = $('mood-grid');
+    grid.textContent = '';
+
+    var group = window.FEELINGS[mood];
+    if (!group) return;
+
+    group.items.forEach(function (item) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'feel-btn';
+
+      var e = document.createElement('span');
+      e.className = 'feel-emoji';
+      e.textContent = item.e;
+
+      var t = document.createElement('span');
+      t.className = 'feel-text';
+      t.textContent = item.t;
+
+      b.appendChild(e);
+      b.appendChild(t);
+      b.addEventListener('click', function () { throwFeeling(item, b); });
+      grid.appendChild(b);
+    });
+  }
+
+  function throwFeeling(item, button) {
+    var me = members[seatOf('me')] || {};
+
+    SYNC.addInbox({ emoji: item.e, text: item.t });
+
+    if (window.PUSHER) {
+      PUSHER.notify({
+        title: (me.name || 'someone') + ' ' + item.e,
+        message: item.t,
+        tag: 'feeling',
+        silent: partnerAsleep()
+      });
+    }
+
+    button.classList.add('is-sent');
+    setTimeout(function () { button.classList.remove('is-sent'); }, 260);
+    if (navigator.vibrate) navigator.vibrate(12);
+  }
+
+  /* Notifications still arrive in the middle of his night, they just arrive
+     quietly, so they're waiting rather than waking him. */
+  function partnerAsleep() {
+    var them = members[seatOf('them')] || {};
+    return them.tz ? isNight(them.tz) : false;
+  }
+
+  function renderThrows() {
+    var ul = $('throws');
+    ul.textContent = '';
+
+    var since = Date.now() - 18 * HOUR;
+    var recent = inbox
+      .filter(function (i) { return (i.at || 0) > since; })
+      .sort(function (a, b) { return (b.at || 0) - (a.at || 0); })
+      .slice(0, 8);
+
+    recent.forEach(function (item) {
+      var mine = item.by === seatOf('me');
+
+      var li = document.createElement('li');
+      li.className = 'throw-row' + (mine ? ' is-mine' : '');
+
+      var who = document.createElement('span');
+      who.className = 'throw-who';
+      who.textContent = mine ? 'you' : ((members[item.by] || {}).name || 'them');
+
+      var text = document.createElement('span');
+      text.className = 'throw-text';
+      text.textContent = (item.emoji ? item.emoji + ' ' : '') + item.text;
+
+      var when = document.createElement('span');
+      when.className = 'throw-when';
+      when.textContent = ago(item.at);
+
+      li.appendChild(who);
+      li.appendChild(text);
+      li.appendChild(when);
+      ul.appendChild(li);
+    });
+  }
+
+  /* ---------------- notification permission ---------------- */
+
+  function renderPushNote() {
+    var btn = $('push-enable');
+    var note = $('push-note');
+
+    if (!window.PUSHER) { btn.hidden = true; note.hidden = true; return; }
+
+    var state = PUSHER.state();
+
+    btn.hidden = state !== 'ready';
+    note.hidden = state === 'on' || state === 'ready';
+
+    if (state === 'off') {
+      note.textContent = 'Notifications are not set up yet - these still show up in the app.';
+    } else if (state === 'needs-install') {
+      note.textContent = 'Add this to your Home Screen and open it from there to get notifications. iPhones will not send them from a Safari tab.';
+    } else if (state === 'unsupported') {
+      note.textContent = "This browser can't do notifications. Everything still lands in the app.";
+    } else if (state === 'blocked') {
+      note.textContent = 'Notifications are blocked. Turn them back on in your phone settings for this app.';
+    }
+  }
+
+  function askForPush() {
+    PUSHER.enable().then(function (result) {
+      renderPushNote();
+
+      if (result === 'on') return toast('Notifications on');
+      if (result === 'blocked') return toast('You said no - change it in settings');
+      if (result === 'needs-install') return toast('Add to Home Screen first');
+      if (result === 'error') return toast("Couldn't turn those on");
+    });
   }
 
   /* ---------------- shared checklist ---------------- */
@@ -815,6 +988,16 @@
     if (!text) return;
     SYNC.addListItem(text);
     input.value = '';
+
+    if (window.PUSHER) {
+      var me = members[seatOf('me')] || {};
+      PUSHER.notify({
+        title: (me.name || 'someone') + ' added to the list',
+        message: text,
+        tag: 'list',
+        silent: partnerAsleep()
+      });
+    }
   }
 
   /* ---------------- first run ---------------- */
@@ -849,6 +1032,7 @@
       }
       closeHello();
       renderSyncBits();
+      if (window.PUSHER) PUSHER.refresh();
       toast('Hello ' + name);
     });
   }
@@ -862,6 +1046,7 @@
     renderClocks();
     renderStatuses();
     renderTodos();
+    renderFeelings();
 
     /* the way back in for anyone who tapped "not now" */
     var unclaimed = !!(window.SYNC && SYNC.isReady() && !SYNC.hasSeat());
@@ -971,10 +1156,27 @@
         if (hit) {
           markCelebrated(key);
           showCelebration(m.kicker + ' \u00b7 ' + e.title, m.title, m.sub);
+          announceMilestone(key, m, e);
           return;
         }
       }
     }
+  }
+
+  /* Both phones work out milestones independently, so whichever notices first
+     claims it and sends the one notification. */
+  function announceMilestone(key, milestone, event) {
+    if (!window.SYNC || !SYNC.isReady() || !SYNC.hasSeat() || !window.PUSHER) return;
+
+    SYNC.claimOnce(key).then(function (mine) {
+      if (!mine) return;
+      PUSHER.notify({
+        title: milestone.title + ' \u00b7 ' + event.title,
+        message: milestone.sub,
+        tag: 'milestone',
+        silent: partnerAsleep()
+      });
+    });
   }
 
   /* ---------------- zero moment ---------------- */
@@ -1093,6 +1295,7 @@
     on('hello-form', 'submit', submitHello);
     on('hello-skip', 'click', closeHello);
     on('foot-hello', 'click', openHello);
+    on('push-enable', 'click', askForPush);
     on('todo-form', 'submit', submitTodo);
 
     on('import-ignore', 'click', closeImport);
@@ -1162,6 +1365,7 @@
         $('clocks').hidden = true;
         $('statuses').hidden = true;
         $('todo-section').hidden = true;
+        $('feelings').hidden = true;
       }
     });
 
@@ -1173,6 +1377,11 @@
     SYNC.on('list', function (items) {
       todos = items || [];
       renderTodos();
+    });
+
+    SYNC.on('inbox', function (items) {
+      inbox = items || [];
+      renderThrows();
     });
 
     SYNC.on('events', function (remote) {
@@ -1209,6 +1418,8 @@
     if (SYNC.isReady()) {
       maybeAskWhoYouAre();
       SYNC.touch();
+      /* push subscriptions rotate silently, so re-file ours on every open */
+      if (window.PUSHER) PUSHER.refresh();
     }
     renderSyncBits();
   }

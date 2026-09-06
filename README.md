@@ -65,6 +65,46 @@ The rules, which live only in the Firebase console:
 }
 ```
 
+## Notifications
+
+Tapping a feeling, changing a status, adding to the list or crossing a
+milestone sends the other phone a notification. Everything also shows up
+inside the app, so nothing is lost if notifications are off.
+
+Sending requires a private key, and anything shipped to a phone is public, so
+a small Cloudflare Worker in `worker/` holds the key and does nothing else.
+It implements two specs by hand rather than pulling in a library, because
+Workers have no Node crypto and the job is about eighty lines:
+
+- **RFC 8292** - the VAPID signature identifying the app to the push service
+- **RFC 8291** - payload encryption, so the push service can't read the message
+
+`node worker/test.mjs` checks the encryption against the worked example in
+RFC 8291. If that passes, the bytes are right.
+
+### Setting it up
+
+```
+node tools/make-vapid.mjs          # once - keys for signing
+cd worker
+npx wrangler deploy
+npx wrangler secret put VAPID_PRIVATE   # the private key from above
+npx wrangler secret put ROOM            # the room name
+```
+
+Then put the deployed URL in `push-config.js`. Until it's filled in,
+notifications are simply switched off and everything else works.
+
+### On iPhones
+
+Push only works from a Home Screen app on iOS 16.4 or newer - never from a
+Safari tab, and it fails silently rather than saying so. Permission must come
+from a real tap, which is what the "turn on notifications" link is for.
+
+Notifications sent while it's the middle of the night for the recipient are
+marked silent. Android honours that; iOS may not, depending on their Focus
+settings.
+
 ## Sharing events
 
 The Share button packs the room name and every event into the link. Once both
