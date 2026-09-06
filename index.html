@@ -51,6 +51,12 @@
     </div>
   </section>
 
+  <!-- Every date sits here so you can flip or edit without scrolling past the rest -->
+  <section id="list-section" class="list-section" hidden>
+    <h3 class="section-title">Every date</h3>
+    <ul id="list" class="list"></ul>
+  </section>
+
   <!-- Both clocks, driven by whatever timezone each phone reports -->
   <section id="clocks" class="clocks" hidden>
     <div class="clock-side" id="clock-me">
@@ -92,12 +98,6 @@
   <section id="meme-card" class="meme-card" hidden>
     <img id="meme-img" class="meme-img" alt="Meme of the day" loading="lazy" decoding="async">
     <p class="meme-foot">meme of the day &middot; <span id="meme-next">new one tomorrow</span></p>
-  </section>
-
-  <!-- Everything else -->
-  <section id="list-section" class="list-section" hidden>
-    <h3 class="section-title">Every date</h3>
-    <ul id="list" class="list"></ul>
   </section>
 
   <!-- Feelings: tap to land on his phone -->

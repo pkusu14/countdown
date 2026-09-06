@@ -267,8 +267,22 @@
 
   /* ---------------- the absurd units ---------------- */
 
+  /* Frozen at local midnight: same pair and same numbers all day, even as
+     the seconds tick. Recalculated when the day rolls or the tab changes. */
+  var measureCache = { key: '', picks: [] };
+
   function renderMeasures(ms) {
-    var picks = pickMeasures(Math.abs(ms));
+    var today = localDayIndex();
+    var key = today + ':' + heroId;
+    if (measureCache.key !== key) {
+      /* remaining as of this morning, so the number does not creep down hourly */
+      var start = startOfLocalDay();
+      var frozen = Math.abs((Date.parse((byId(heroId) || {}).date) || 0) - start);
+      if (!frozen) frozen = Math.abs(ms);
+      measureCache = { key: key, picks: pickMeasures(frozen, today) };
+    }
+
+    var picks = measureCache.picks;
     var box = $('measures');
 
     box.hidden = picks.length === 0;
@@ -284,21 +298,34 @@
     }
   }
 
-  /* Two a day, taken from the date so both phones show the same pair. One
-     fixed order walked two steps a day, which is what guarantees the gap: a
-     unit can't come back until the whole list has been through, and there are
-     enough of them for that to be over a month. Anything that rounds down to
-     zero on a short countdown gets stepped over rather than shown. */
-  function pickMeasures(ms) {
+  function startOfLocalDay() {
+    var d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  }
+
+  /* Near enough is the point - 7,640 plays of Billie Jean reads as a
+     calculation, 7,600 reads as a measurement. */
+  function ballpark(n) {
+    if (n < 20) return Math.max(1, Math.round(n));
+    if (n < 100) return Math.round(n / 5) * 5;
+    if (n < 1000) return Math.round(n / 10) * 10;
+    if (n < 10000) return Math.round(n / 50) * 50;
+    var step = Math.pow(10, Math.floor(Math.log10(n)) - 1);
+    return Math.round(n / step) * step;
+  }
+
+  /* Two a day, taken from the date so both phones show the same pair. */
+  function pickMeasures(ms, dayIndex) {
     var order = shuffled(window.MEASURES || []);
     if (order.length < 2) return [];
 
-    var start = (localDayIndex() * 2) % order.length;
+    var start = ((dayIndex == null ? localDayIndex() : dayIndex) * 2) % order.length;
 
     var out = [];
     for (var i = 0; i < order.length && out.length < 2; i++) {
       var item = order[(start + i) % order.length];
-      var count = Math.round(ms / (item.s * 1000));
+      var count = ballpark(ms / (item.s * 1000));
       if (count >= 1) out.push({ count: count, unit: item.unit });
     }
     return out;
