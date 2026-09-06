@@ -93,41 +93,6 @@ body {
   border-radius: 28px;
 }
 
-/* ---------- countdown tabs ---------- */
-.hero-tabs {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 10px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.hero-tabs::-webkit-scrollbar { display: none; }
-
-.hero-tab {
-  flex: none;
-  max-width: 46vw;
-  appearance: none;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 550;
-  color: var(--muted);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 7px 14px;
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.hero-tab.is-on {
-  color: var(--text);
-  background: var(--accent-soft);
-  border-color: var(--accent);
-}
-
 .eyebrow {
   margin: 0 0 6px;
   font-size: 12px;

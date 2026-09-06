@@ -133,7 +133,6 @@
       $('hero').classList.toggle('is-past', isPast);
     }
 
-    renderTabs();
     renderList();
     renderMeme();
     tick();
@@ -150,30 +149,6 @@
     var upcoming = events.filter(function (e) { return Date.parse(e.date) > now; })[0];
 
     return justHappened || upcoming || events[0] || null;
-  }
-
-  /* One tab per event, in the same order as the list below. Only worth
-     showing once there is more than one thing to flip between. */
-  function renderTabs() {
-    var bar = $('hero-tabs');
-    bar.textContent = '';
-    bar.hidden = events.length < 2;
-    if (bar.hidden) return;
-
-    events.forEach(function (e) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'hero-tab' + (e.id === heroId ? ' is-on' : '');
-      b.setAttribute('role', 'tab');
-      b.setAttribute('aria-selected', e.id === heroId ? 'true' : 'false');
-      b.textContent = (e.emoji ? e.emoji + ' ' : '') + e.title;
-      b.addEventListener('click', function () {
-        pickedId = e.id;
-        render();
-        b.scrollIntoView({ block: 'nearest', inline: 'center' });
-      });
-      bar.appendChild(b);
-    });
   }
 
   function renderList() {
@@ -1510,7 +1485,15 @@
 
     on('list', 'click', function (ev) {
       var row = ev.target.closest('.row');
-      if (row) openSheet(byId(row.dataset.id));
+      if (!row) return;
+      /* tap another date to put it on the timer; tap the one already
+         showing, or the only one, to edit it */
+      if (row.dataset.id === heroId || events.length === 1) {
+        openSheet(byId(row.dataset.id));
+      } else {
+        pickedId = row.dataset.id;
+        render();
+      }
     });
 
     document.addEventListener('keydown', function (ev) {
