@@ -985,11 +985,9 @@
     var ul = $('throws');
     ul.textContent = '';
 
-    var since = Date.now() - 18 * HOUR;
     var recent = inbox
-      .filter(function (i) { return (i.at || 0) > since; })
       .sort(function (a, b) { return (b.at || 0) - (a.at || 0); })
-      .slice(0, 8);
+      .slice(0, 2);
 
     recent.forEach(function (item) {
       var mine = item.by === seatOf('me');
