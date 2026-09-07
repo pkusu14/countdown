@@ -727,6 +727,106 @@
     $('status-them-age').textContent = ago(them.statusAt);
   }
 
+  function renderListening() {
+    var section = $('listening');
+    if (!section) return;
+
+    if (!window.SYNC || !SYNC.isReady() || !SYNC.hasSeat() || !window.SPOTIFY || !SPOTIFY.configured()) {
+      section.hidden = true;
+      return;
+    }
+    section.hidden = false;
+
+    fillListen($('listen-them'), members[seatOf('them')], false);
+    fillListen($('listen-me'), members[seatOf('me')], true);
+
+    var connect = $('spot-connect');
+    connect.hidden = SPOTIFY.connected();
+  }
+
+  function fillListen(el, person, mine) {
+    var info = (person || {}).listening;
+    var fresh = window.SPOTIFY && SPOTIFY.isFresh(info);
+    if (!fresh) {
+      el.hidden = true;
+      el.textContent = '';
+      el.removeAttribute('href');
+      return;
+    }
+
+    el.hidden = false;
+    el.classList.toggle('is-paused', !info.playing);
+    if (info.url) el.href = info.url;
+    else el.removeAttribute('href');
+
+    el.textContent = '';
+
+    if (info.art) {
+      var img = document.createElement('img');
+      img.className = 'listen-art';
+      img.alt = '';
+      img.src = info.art;
+      el.appendChild(img);
+    }
+
+    var main = document.createElement('div');
+    main.className = 'listen-main';
+
+    var who = document.createElement('span');
+    who.className = 'listen-who';
+    who.textContent = (mine ? 'you' : (person.name || 'them')) + (info.playing ? '' : ' · paused');
+
+    var title = document.createElement('span');
+    title.className = 'listen-title';
+    title.textContent = info.title;
+
+    var artist = document.createElement('span');
+    artist.className = 'listen-artist';
+    artist.textContent = info.artist || 'Spotify';
+
+    main.appendChild(who);
+    main.appendChild(title);
+    main.appendChild(artist);
+    el.appendChild(main);
+  }
+
+  function openSpot() {
+    $('spot-input').value = '';
+    $('spot-error').hidden = true;
+    $('spot-disconnect').hidden = !(window.SPOTIFY && SPOTIFY.connected());
+    $('spot-backdrop').hidden = false;
+    $('spot').hidden = false;
+  }
+
+  function closeSpot() {
+    $('spot').hidden = true;
+    $('spot-backdrop').hidden = true;
+  }
+
+  function applySpotPaste() {
+    var text = $('spot-input').value.trim();
+    if (!text) {
+      $('spot-error').textContent = 'Paste the address Safari sent you back to.';
+      $('spot-error').hidden = false;
+      return;
+    }
+    SPOTIFY.handleCallbackUrl(text).then(function (result) {
+      if (result === 'ok') {
+        closeSpot();
+        renderListening();
+        toast('Spotify connected');
+        return;
+      }
+      var msg = {
+        denied: 'You said no on Spotify.',
+        'missing-verifier': 'Start from Open Spotify in this app first, then paste.',
+        none: "That doesn't look like the address Spotify sent back."
+      }[result] || "Couldn't connect - try Open Spotify again.";
+      $('spot-error').textContent = msg;
+      $('spot-error').hidden = false;
+    });
+  }
+
   /* Both names once both phones have said who they are. Sorted rather than
      me-first, so the header reads identically on each of them. */
   function renderBrand() {
@@ -1196,6 +1296,7 @@
       closeHello();
       renderSyncBits();
       if (window.PUSHER) PUSHER.refresh();
+      if (window.SPOTIFY) SPOTIFY.start();
       toast('Hello ' + name);
     });
   }
@@ -1209,6 +1310,7 @@
     renderBrand();
     renderClocks();
     renderStatuses();
+    renderListening();
     renderTodos();
     renderFeelings();
 
@@ -1470,6 +1572,18 @@
     on('feel-save', 'click', saveFeeling);
     on('feel-form', 'submit', function (ev) { ev.preventDefault(); saveFeeling(); });
 
+    on('spot-connect', 'click', openSpot);
+    on('spot-cancel', 'click', closeSpot);
+    on('spot-backdrop', 'click', closeSpot);
+    on('spot-login', 'click', function () { if (window.SPOTIFY) SPOTIFY.connect(); });
+    on('spot-disconnect', 'click', function () {
+      if (window.SPOTIFY) SPOTIFY.disconnect();
+      closeSpot();
+      renderListening();
+      toast('Spotify disconnected');
+    });
+    on('spot-go', 'click', applySpotPaste);
+
     on('import-ignore', 'click', closeImport);
     on('import-backdrop', 'click', closeImport);
     on('import-merge', 'click', function () { applyImport('merge'); });
@@ -1496,7 +1610,7 @@
 
     document.addEventListener('keydown', function (ev) {
       if (ev.key !== 'Escape') return;
-      closeSheet(); closeImport(); closePaste(); closePicker(); closeFeelMaker();
+      closeSheet(); closeImport(); closePaste(); closePicker(); closeFeelMaker(); closeSpot();
     });
 
     /* phones freeze timers in the background - resync on return */
@@ -1506,6 +1620,7 @@
       clocksStale = true;
       /* republish the timezone: he may have landed somewhere new */
       if (window.SYNC) SYNC.touch();
+      if (window.SPOTIFY) SPOTIFY.poll();
     });
   }
 
@@ -1547,6 +1662,7 @@
         $('statuses').hidden = true;
         $('todo-section').hidden = true;
         $('feelings').hidden = true;
+        $('listening').hidden = true;
       }
     });
 
@@ -1607,6 +1723,7 @@
       SYNC.touch();
       /* push subscriptions rotate silently, so re-file ours on every open */
       if (window.PUSHER) PUSHER.refresh();
+      if (window.SPOTIFY) SPOTIFY.start();
     }
     renderSyncBits();
   }
@@ -1624,6 +1741,14 @@
     wire();
     wireSyncHandlers();
     checkIncoming();
+    if (window.SPOTIFY) {
+      SPOTIFY.finishFromLocation().then(function (result) {
+        if (result === 'ok') toast('Spotify connected');
+        else if (result === 'denied') toast('Spotify login cancelled');
+        else if (result && result !== 'none') toast("Couldn't connect Spotify");
+        renderListening();
+      });
+    }
     render();
     setInterval(tick, SECOND);
     startSync();

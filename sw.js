@@ -4,7 +4,7 @@
  * and memes, which are big and only fetched as they come up. Downloading the
  * whole meme folder onto his phone up front would be rude. */
 
-const VERSION = 'v11';
+const VERSION = 'v12';
 const SHELL_CACHE = `us-shell-${VERSION}`;
 const MEME_CACHE = `us-memes-${VERSION}`;
 
@@ -22,6 +22,8 @@ const SHELL = [
   'push.js',
   'firebase-config.js',
   'push-config.js',
+  'spotify-config.js',
+  'spotify.js',
   'manifest.webmanifest',
   'assets/icons/icon-180.png',
   'assets/icons/icon-192.png',

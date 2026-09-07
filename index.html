@@ -83,6 +83,13 @@
     </div>
   </section>
 
+  <!-- Now playing, from each phone's own Spotify -->
+  <section id="listening" class="listening" hidden>
+    <a id="listen-them" class="listen" hidden target="_blank" rel="noopener"></a>
+    <a id="listen-me" class="listen" hidden target="_blank" rel="noopener"></a>
+    <button id="spot-connect" class="listen is-connect" type="button" hidden>connect Spotify</button>
+  </section>
+
   <!-- Shown when there are no events at all -->
   <section id="empty" class="empty" hidden>
     <p class="empty-big">Nothing on the calendar.</p>
@@ -259,6 +266,32 @@
   </div>
 </div>
 
+<!-- Spotify: connect, or paste the address Safari kept after login -->
+<div id="spot-backdrop" class="backdrop" hidden></div>
+<div id="spot" class="sheet" role="dialog" aria-modal="true" aria-labelledby="spot-title" hidden>
+  <div class="sheet-grip"></div>
+  <h3 id="spot-title" class="sheet-title">Spotify</h3>
+  <p class="sheet-body">
+    Each phone connects its own account. On an iPhone the login often finishes
+    in Safari instead of this app &mdash; copy the address it lands on and
+    paste it below.
+  </p>
+
+  <label class="field">
+    <span class="field-label">The address Safari sent you back to</span>
+    <textarea id="spot-input" class="paste-box" rows="3" placeholder="https://pkusu14.github.io/countdown/?code=..." autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+  </label>
+  <p id="spot-error" class="form-error" hidden></p>
+
+  <div class="sheet-actions">
+    <button type="button" id="spot-disconnect" class="btn danger" hidden>Disconnect</button>
+    <div class="spacer"></div>
+    <button type="button" id="spot-cancel" class="btn">Close</button>
+    <button type="button" id="spot-go" class="btn">Paste &amp; connect</button>
+    <button type="button" id="spot-login" class="btn primary">Open Spotify</button>
+  </div>
+</div>
+
 <!-- Paste a shared link (the only way in on an installed iPhone app) -->
 <div id="paste-backdrop" class="backdrop" hidden></div>
 <div id="paste" class="sheet" role="dialog" aria-modal="true" aria-labelledby="paste-title" hidden>
@@ -324,8 +357,10 @@
 <script src="feelings.js"></script>
 <script src="firebase-config.js"></script>
 <script src="push-config.js"></script>
+<script src="spotify-config.js"></script>
 <script defer src="sync.js"></script>
 <script defer src="push.js"></script>
+<script defer src="spotify.js"></script>
 <script defer src="app.js"></script>
 </body>
 </html>

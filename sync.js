@@ -209,6 +209,16 @@
     }).catch(function () {});
   }
 
+  function setListening(info) {
+    if (!ready || !seat) return;
+    room.child('members/' + seat + '/listening').set(info).catch(function () {});
+  }
+
+  function clearListening() {
+    if (!ready || !seat) return;
+    room.child('members/' + seat + '/listening').remove().catch(function () {});
+  }
+
   /* ---------------- push ---------------- */
 
   function setPush(subscription) {
@@ -334,6 +344,8 @@
     touch: touch,
     setStatus: setStatus,
     setName: setName,
+    setListening: setListening,
+    clearListening: clearListening,
     setPush: setPush,
     clearPush: clearPush,
     addInbox: addInbox,
