@@ -888,17 +888,18 @@
   function chooseStatus(text) {
     if (window.SYNC) SYNC.setStatus(text);
     closePicker();
-    toast(text ? 'Status set' : 'Status cleared');
 
-    if (text && window.PUSHER) {
+    if (text) {
       var me = members[seatOf('me')] || {};
-      PUSHER.notify({
+      if (!pingThem({
         title: me.name || 'us.',
         message: 'is now ' + text,
         /* one status per person on the lock screen, not a pile of them */
         tag: 'status-' + seatOf('me'),
         silent: partnerAsleep()
-      });
+      })) toast('Status set');
+    } else {
+      toast('Status cleared');
     }
   }
 
@@ -1060,14 +1061,12 @@
 
     SYNC.addInbox({ emoji: item.e, text: item.t });
 
-    if (window.PUSHER) {
-      PUSHER.notify({
-        title: (me.name || 'someone') + ' ' + item.e,
-        message: item.t,
-        tag: 'feeling',
-        silent: partnerAsleep()
-      });
-    }
+    pingThem({
+      title: (me.name || 'someone') + ' ' + item.e,
+      message: item.t,
+      tag: 'feeling',
+      silent: partnerAsleep()
+    });
 
     button.classList.add('is-sent');
     setTimeout(function () { button.classList.remove('is-sent'); }, 260);
@@ -1252,15 +1251,13 @@
     SYNC.addListItem(text);
     input.value = '';
 
-    if (window.PUSHER) {
-      var me = members[seatOf('me')] || {};
-      PUSHER.notify({
-        title: (me.name || 'someone') + ' added to the list',
-        message: text,
-        tag: 'list',
-        silent: partnerAsleep()
-      });
-    }
+    var me = members[seatOf('me')] || {};
+    pingThem({
+      title: (me.name || 'someone') + ' added to the list',
+      message: text,
+      tag: 'list',
+      silent: partnerAsleep()
+    });
   }
 
   /* ---------------- first run ---------------- */
@@ -1516,12 +1513,31 @@
 
   var toastTimer = null;
 
-  function toast(msg) {
+  function toast(msg, ms) {
     var el = $('toast');
     el.textContent = msg;
+    el.classList.remove('is-out');
     el.hidden = false;
+    /* retrigger the rise if a toast is already on screen */
+    el.style.animation = 'none';
+    void el.offsetWidth;
+    el.style.animation = '';
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { el.hidden = true; }, 2600);
+    toastTimer = setTimeout(function () {
+      el.classList.add('is-out');
+      toastTimer = setTimeout(function () {
+        el.hidden = true;
+        el.classList.remove('is-out');
+      }, 220);
+    }, ms || 2600);
+  }
+
+  /* Quiet confirmation on this phone that the other one was pinged.
+     Milestones skip this - those fire themselves. */
+  function pingThem(opts) {
+    if (!window.PUSHER || !PUSHER.notify(opts)) return false;
+    toast('Sent!', 1400);
+    return true;
   }
 
   /* If a phone ever ends up running this script against an older cached page,

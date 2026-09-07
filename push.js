@@ -107,9 +107,9 @@
   }
 
   /* Fire and forget - a failed notification must never block the thing that
-     triggered it. */
+     triggered it. Returns true only when a send was actually kicked off. */
   function notify(opts) {
-    if (!configured() || !window.SYNC || !SYNC.isReady() || !SYNC.hasSeat()) return;
+    if (!configured() || !window.SYNC || !SYNC.isReady() || !SYNC.hasSeat()) return false;
 
     fetch(cfg.worker.replace(/\/$/, '') + '/notify', {
       method: 'POST',
@@ -123,6 +123,7 @@
         silent: !!opts.silent
       })
     }).catch(function () {});
+    return true;
   }
 
   window.PUSHER = {
