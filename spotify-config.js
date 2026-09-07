@@ -9,5 +9,5 @@
 */
 
 window.SPOTIFY_CONFIG = {
-  clientId: ''
+  clientId: '68a161d6e9c7430981c0d948a00b3eb7'
 };
