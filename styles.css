@@ -918,15 +918,18 @@ input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); opaci
   z-index: 50;
   left: 50%;
   transform: translateX(-50%);
-  bottom: calc(24px + env(safe-area-inset-bottom));
-  padding: 12px 18px;
-  background: var(--surface-2);
-  border: 1px solid var(--line);
+  top: calc(18px + env(safe-area-inset-top));
+  bottom: auto;
+  padding: 16px 28px;
+  background: var(--accent);
+  border: none;
   border-radius: 999px;
-  font-size: 14px;
-  font-weight: 550;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
-  animation: toast-rise .2s ease;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  box-shadow: 0 10px 28px rgba(255, 84, 112, 0.38);
+  animation: toast-drop .22s ease;
   transition: opacity .2s ease;
 }
 
@@ -935,8 +938,8 @@ input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); opaci
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
 /* keeps the centring transform, which a plain translateY would wipe out */
-@keyframes toast-rise {
-  from { opacity: 0; transform: translate(-50%, 16px); }
+@keyframes toast-drop {
+  from { opacity: 0; transform: translate(-50%, -18px); }
   to { opacity: 1; transform: translate(-50%, 0); }
 }
 
