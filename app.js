@@ -1508,10 +1508,16 @@
     return m.test ? m.test(ms, total) : false;
   }
 
+  /* The sexually dated one is on the list. It does not get a parade. */
+  function quietMilestones(e) {
+    return String((e && e.title) || '').trim().toLowerCase() === 'come here (sexually)';
+  }
+
   function activeMilestone(now) {
     var best = null;
     for (var i = 0; i < events.length; i++) {
       var e = events[i];
+      if (quietMilestones(e)) continue;
       var ms = Date.parse(e.date) - now;
       if (ms <= 0) continue;
       var total = e.createdAt ? Date.parse(e.date) - e.createdAt : 0;
@@ -1601,6 +1607,7 @@
 
     for (var i = 0; i < events.length; i++) {
       var e = events[i];
+      if (quietMilestones(e)) continue;
       var ms = Date.parse(e.date) - now;
       if (ms <= 0) continue;
 
