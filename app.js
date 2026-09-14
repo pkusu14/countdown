@@ -281,14 +281,12 @@
     var right = box.children[1];
 
     left.hidden = !joke;
-    left.classList.remove('is-waking');
     if (joke) {
       $('measure-1-v').textContent = joke.count.toLocaleString();
       $('measure-1-l').textContent = joke.unit;
     }
 
     right.hidden = false;
-    right.classList.add('is-waking');
     $('measure-2-v').textContent = wakingCache.hours.toLocaleString();
     $('measure-2-l').textContent = 'waking hours left';
   }

@@ -176,13 +176,6 @@ body {
   color: var(--muted);
 }
 
-.measure.is-waking {
-  background: var(--accent-soft);
-  border-color: rgba(255, 84, 112, 0.28);
-}
-
-.measure.is-waking .measure-v { color: var(--accent); }
-
 /* ---------- empty ---------- */
 .empty {
   margin-top: 18px;
@@ -616,89 +609,121 @@ body {
 
 .todo-empty { margin: 6px 2px 0; font-size: 13px; color: var(--muted); }
 
-/* ---------- the map ---------- */
-.map-section { margin-top: 16px; }
-
-.map-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: 100%;
-  text-align: left;
-  text-decoration: none;
-  color: inherit;
-  padding: 10px 12px 10px 10px;
+/* ---------- together list card ---------- */
+.todo-card {
+  margin-top: 16px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-}
-
-.map-card:active { transform: scale(0.99); }
-
-.map-preview {
-  position: relative;
-  flex: none;
-  width: 72px;
-  height: 72px;
-  border-radius: 14px;
   overflow: hidden;
-  background:
-    repeating-linear-gradient(90deg, transparent 0 18px, rgba(255,255,255,0.04) 18px 19px),
-    repeating-linear-gradient(0deg, transparent 0 16px, rgba(255,255,255,0.04) 16px 17px),
-    linear-gradient(160deg, #1a2430 0%, #121820 55%, #18241c 100%);
 }
 
-.map-preview::before {
+.todo-toggle {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 72px;
+  padding: 18px 18px;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.todo-toggle-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.todo-toggle .section-title { margin: 0; }
+
+.todo-toggle::after {
   content: '';
-  position: absolute;
-  left: 8px;
-  right: 22px;
-  top: 28px;
-  height: 2px;
-  background: rgba(126, 224, 193, 0.28);
-  border-radius: 2px;
-  transform: rotate(-18deg);
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform .15s ease;
 }
 
-.map-preview::after {
-  content: '';
-  position: absolute;
-  left: 18px;
-  right: 10px;
-  top: 46px;
-  height: 2px;
-  background: rgba(138, 182, 255, 0.22);
-  border-radius: 2px;
-  transform: rotate(12deg);
+.todo-toggle.is-open::after { transform: rotate(225deg); }
+
+.todo-body {
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--line);
 }
 
-.map-pin {
-  position: absolute;
-  left: 50%;
-  top: 44%;
-  z-index: 1;
-  width: 16px;
-  height: 16px;
+.todo-body .todo-form { margin-top: 12px; }
+
+/* ---------- the map ---------- */
+.map-section { margin-top: 16px; }
+
+.map-wrap {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.us-map {
+  height: 280px;
+  width: 100%;
+  background: #121820;
+}
+
+.map-dot {
   background: var(--accent);
-  border-radius: 50% 50% 50% 0;
-  transform: translate(-50%, -60%) rotate(-45deg);
-  box-shadow: 0 6px 12px rgba(255, 84, 112, 0.4);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
 }
 
-.map-copy { flex: 1; min-width: 0; }
-
-.map-title {
+.map-open {
   display: block;
-  font-size: 15px;
-  font-weight: 650;
-}
-
-.map-sub {
-  display: block;
-  margin-top: 3px;
+  padding: 12px 14px;
   font-size: 12px;
   color: var(--muted);
+  text-decoration: none;
+  border-top: 1px solid var(--line);
 }
+
+.map-open:active { color: var(--text); }
+
+.leaflet-container { background: #121820; font: inherit; }
+.leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) saturate(0.35) brightness(0.75); }
+.leaflet-control-attribution {
+  background: transparent !important;
+  color: var(--muted);
+  font-size: 10px;
+}
+.leaflet-control-attribution a { color: var(--muted); }
+.leaflet-control-zoom a {
+  background: var(--surface-2) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--line) !important;
+}
+.leaflet-popup-content-wrapper {
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.leaflet-popup-tip { background: var(--surface); }
+.leaflet-popup-content { margin: 10px 12px; font-size: 13px; line-height: 1.4; }
+.leaflet-popup-content strong { display: block; margin-bottom: 2px; }
+.leaflet-popup-content span { color: var(--muted); font-size: 12px; }
+.leaflet-popup-content a { color: var(--accent); }
+.leaflet-popup-close-button { color: var(--muted) !important; }
 
 /* ---------- meme ---------- */
 .meme-card {

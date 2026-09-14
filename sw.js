@@ -4,7 +4,7 @@
  * and memes, which are big and only fetched as they come up. Downloading the
  * whole meme folder onto his phone up front would be rude. */
 
-const VERSION = 'v18';
+const VERSION = 'v19';
 const SHELL_CACHE = `us-shell-${VERSION}`;
 const MEME_CACHE = `us-memes-${VERSION}`;
 
@@ -24,6 +24,8 @@ const SHELL = [
   'push-config.js',
   'spotify-config.js',
   'spotify.js',
+  'places.js',
+  'map.js',
   'manifest.webmanifest',
   'assets/icons/icon-180.png',
   'assets/icons/icon-192.png',
@@ -35,7 +37,9 @@ const SHELL = [
 // waiting on it; the app works without it either way.
 const VENDOR = [
   'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js',
-  'https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js'
+  'https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js',
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
 ];
 
 self.addEventListener('install', (event) => {
