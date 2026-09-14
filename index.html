@@ -115,17 +115,22 @@
     <ul id="throws" class="throws"></ul>
   </section>
 
-  <!-- Shared checklist -->
+  <!-- Shared checklist, collapsed until you tap the title -->
   <section id="todo-section" class="list-section" hidden>
-    <h3 class="section-title">When we're together</h3>
+    <button type="button" id="todo-toggle" class="section-toggle" aria-expanded="false">
+      <span class="section-title">When we're together</span>
+      <span id="todo-meta" class="section-meta"></span>
+    </button>
 
-    <form id="todo-form" class="todo-form">
-      <input id="todo-input" type="text" placeholder="add something..." maxlength="120" autocomplete="off">
-      <button type="submit" class="btn primary todo-add">Add</button>
-    </form>
+    <div id="todo-body" hidden>
+      <form id="todo-form" class="todo-form">
+        <input id="todo-input" type="text" placeholder="add something..." maxlength="120" autocomplete="off">
+        <button type="submit" class="btn primary todo-add">Add</button>
+      </form>
 
-    <ul id="todo-list" class="todo-list"></ul>
-    <p id="todo-empty" class="todo-empty">Nothing on the list yet. What are we doing first?</p>
+      <ul id="todo-list" class="todo-list"></ul>
+      <p id="todo-empty" class="todo-empty">Nothing on the list yet. What are we doing first?</p>
+    </div>
   </section>
 
   <footer class="foot">
@@ -332,10 +337,14 @@
   </div>
 </div>
 
-<!-- Zero moment -->
+<!-- Soft confetti while a milestone day is on -->
+<div id="day-confetti" class="day-confetti" hidden aria-hidden="true"></div>
+
+<!-- Zero moment / milestone day -->
 <div id="celebrate" class="celebrate" hidden>
   <canvas id="confetti" class="confetti"></canvas>
   <div class="celebrate-inner">
+    <img id="celebrate-cat" class="scuba-cat" src="assets/celebrate/scuba-cat.png" alt="" hidden>
     <p id="celebrate-kicker" class="celebrate-kicker">the countdown is over</p>
     <h2 id="celebrate-title" class="celebrate-title">HE'S HERE</h2>
     <p id="celebrate-sub" class="celebrate-sub">go, put the phone down</p>

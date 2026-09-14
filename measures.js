@@ -1,9 +1,9 @@
 /* Other ways of saying how long is left.
  *
  * Each entry is one concrete thing and how many seconds it takes. The app
- * divides the remaining time by that, rounds to a ballpark, and shows two
- * a day. The pair and the numbers freeze until local midnight so both phones
- * are looking at the same joke all day.
+ * divides the remaining time by that, rounds to a ballpark, and shows one
+ * a day on the left card. The right card is always waking hours left.
+ * The joke freezes until local midnight so both phones see the same one.
  *
  *   s    seconds one of the thing takes
  *   unit what the number is counting

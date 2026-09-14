@@ -170,10 +170,83 @@
     });
   }
 
+  /* A new line every time the milestone popup opens that day. Specific
+     lines first, then a shared pool, so you can mash reopen without
+     immediately repeating yourself. */
+  var MILESTONE_SHARED = [
+    'the scuba cat has entered the chat. this is legally a holiday.',
+    'confetti in a long-distance relationship is just violence. more please.',
+    'i am taking this far too well. (lying.)',
+    'we are so back. we were never gone. i am unwell.',
+    'if anyone needs me i will be on the floor about this.',
+    'this is my personality for the next 24 hours. sorry to everyone else.',
+    'have already told three people. they did not ask.',
+    'the wait just flinched. i saw it.',
+    'currently doing the maths again in case the universe made a rounding error in our favour.',
+    'i will be normal. i will be so normal. starting tomorrow.',
+    'this is the good kind of insane.',
+    'screenshotting the countdown like it might run away.',
+    'somebody hold my phone. or me. both is fine.',
+    'if i start packing now that is between me and god.',
+    'the calendar said a nice thing for once. unheard of.',
+    'do not look at me i am celebrating a number.',
+    'this is a full-body event. the knees know.',
+    'i have become the scuba cat. this is not a bit.'
+  ];
+
+  var MILESTONE_LINES = {
+    half: [
+      'halfway. we have survived the stupid part. allegedly.',
+      'the downhill stretch starts now. i will still complain.',
+      'half the wait is dead and i killed it by waiting. champion behaviour.',
+      'from here the number only gets hotter.'
+    ],
+    m30: [
+      'a month. a whole month. we have done worse.',
+      'thirty days is a personality. mine is this.',
+      'close enough to be annoying about it. far enough to still be annoying about it.'
+    ],
+    m14: [
+      'two weeks. packing list. unhinged playlist. no notes.',
+      'fourteen days is basically soon. i will not be taking questions.',
+      'close enough to start doing laundry with intent.',
+      'the smug era starts now.'
+    ],
+    m10: [
+      'double figures are over. we are in the cute numbers now.',
+      'ten. TEN. that is a handful. i can hold ten.',
+      'single digits are making eye contact.'
+    ],
+    m7: [
+      'this time next week. i said it. i will say it again.',
+      'seven days. a whole week of being insufferable. earned.',
+      'the last week is not a week it is a countdown with a superiority complex.'
+    ],
+    m3: [
+      'three sleeps. i will use none of them well.',
+      'ok NOW it is happening. the previous times were practice.',
+      'seventy-two hours of composure. we do not have that kind of budget.'
+    ],
+    m1: [
+      'tomorrow. go to sleep. you will not.',
+      'the last full day of missing you on purpose.',
+      'if i open this one more time the plane will come faster. this is science.',
+      'tomorrow. TOMORROW. i have lost the plot and i am keeping it.'
+    ]
+  };
+
+  function pickMilestoneLine(id, n) {
+    var pool = (MILESTONE_LINES[id] || []).concat(MILESTONE_SHARED);
+    if (!pool.length) return 'we are celebrating a number. it is going great.';
+    var i = Math.abs(n) % pool.length;
+    return pool[i];
+  }
+
   window.JOKES = {
     pickLine: pickLine,
     humanize: humanize,
     statsFor: statsFor,
-    bucketFor: bucketFor
+    bucketFor: bucketFor,
+    pickMilestoneLine: pickMilestoneLine
   };
 })();

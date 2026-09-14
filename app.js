@@ -4,6 +4,8 @@
   var STORE_KEY = 'us.events.v1';
   var DONE_KEY = 'us.celebrated.v1';
   var NOTIFY_KEY = 'us.notifyask.v1';
+  var TODO_OPEN_KEY = 'us.todoopen.v1';
+  var MILESTONE_OPENS_KEY = 'us.milestoneopens.v1';
   var SECOND = 1000, MIN = 60000, HOUR = 3600000, DAY = 86400000;
 
   var $ = function (id) { return document.getElementById(id); };
@@ -242,41 +244,108 @@
 
   /* ---------------- the absurd units ---------------- */
 
-  /* Frozen at local midnight: same pair and same numbers all day, even as
-     the seconds tick. Recalculated when the day rolls or the tab changes. */
-  var measureCache = { key: '', picks: [] };
+  /* Frozen at local midnight: same joke all day. Waking hours on the
+     right refresh every hour. */
+  var measureCache = { key: '', pick: null };
+  var wakingCache = { key: '', hours: 0 };
 
   function renderMeasures(ms) {
-    var today = localDayIndex();
-    var key = today + ':' + heroId;
-    if (measureCache.key !== key) {
-      /* remaining as of this morning, so the number does not creep down hourly */
-      var start = startOfLocalDay();
-      var frozen = Math.abs((Date.parse((byId(heroId) || {}).date) || 0) - start);
-      if (!frozen) frozen = Math.abs(ms);
-      measureCache = { key: key, picks: pickMeasures(frozen, today) };
-    }
-
-    var picks = measureCache.picks;
     var box = $('measures');
-
-    box.hidden = picks.length === 0;
-    if (box.hidden) return;
-
-    for (var i = 0; i < 2; i++) {
-      var pick = picks[i];
-      box.children[i].hidden = !pick;
-      if (!pick) continue;
-
-      $('measure-' + (i + 1) + '-v').textContent = pick.count.toLocaleString();
-      $('measure-' + (i + 1) + '-l').textContent = pick.unit;
+    var hero = byId(heroId);
+    if (!hero || ms <= 0) {
+      box.hidden = true;
+      return;
     }
+
+    var today = localDayIndex();
+    var jokeKey = today + ':' + heroId;
+    if (measureCache.key !== jokeKey) {
+      var start = startOfLocalDay();
+      var frozen = Math.abs(Date.parse(hero.date) - start) || Math.abs(ms);
+      measureCache = { key: jokeKey, pick: pickMeasures(frozen, today) };
+    }
+
+    var sleep = mySleepWindow();
+    var wakingKey = heroId + ':' + Math.floor(Date.now() / HOUR) + ':' + sleep.tz + ':' + sleep.start;
+    if (wakingCache.key !== wakingKey) {
+      wakingCache = {
+        key: wakingKey,
+        hours: countWakingHours(Date.now(), Date.parse(hero.date), sleep)
+      };
+    }
+
+    var joke = measureCache.pick;
+    box.hidden = false;
+
+    var left = box.children[0];
+    var right = box.children[1];
+
+    left.hidden = !joke;
+    left.classList.remove('is-waking');
+    if (joke) {
+      $('measure-1-v').textContent = joke.count.toLocaleString();
+      $('measure-1-l').textContent = joke.unit;
+    }
+
+    right.hidden = false;
+    right.classList.add('is-waking');
+    $('measure-2-v').textContent = wakingCache.hours.toLocaleString();
+    $('measure-2-l').textContent = 'waking hours left';
   }
 
   function startOfLocalDay() {
     var d = new Date();
     d.setHours(0, 0, 0, 0);
     return d.getTime();
+  }
+
+  /* Pranavi sleeps midnight–7 in Paris. Hari sleeps 2–9 in India.
+     Home timezones on purpose: his sleep does not move just because the
+     airport does. 7 hours either way. */
+  function mySleepWindow() {
+    var me = members[seatOf('me')] || {};
+    var name = String(me.name || '').toLowerCase();
+    if (name.indexOf('hari') !== -1) return { tz: 'Asia/Kolkata', start: 2, end: 9 };
+    if (name.indexOf('pranavi') !== -1) return { tz: 'Europe/Paris', start: 0, end: 7 };
+    var tz = me.tz || '';
+    if (/Kolkata|Calcutta/i.test(tz)) return { tz: 'Asia/Kolkata', start: 2, end: 9 };
+    return { tz: 'Europe/Paris', start: 0, end: 7 };
+  }
+
+  function hourInZone(ms, tz) {
+    try {
+      var parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: tz,
+        hour: 'numeric',
+        hourCycle: 'h23'
+      }).formatToParts(new Date(ms));
+      for (var i = 0; i < parts.length; i++) {
+        if (parts[i].type === 'hour') return Number(parts[i].value);
+      }
+    } catch (e) {}
+    return new Date(ms).getHours();
+  }
+
+  function isSleepHour(ms, sleep) {
+    var h = hourInZone(ms, sleep.tz);
+    return h >= sleep.start && h < sleep.end;
+  }
+
+  function countWakingHours(from, to, sleep) {
+    if (!(to > from)) return 0;
+    var hours = 0;
+    var cursor = Math.floor(from / HOUR) * HOUR;
+    var guard = 0;
+    while (cursor < to && guard < 20000) {
+      var sliceStart = Math.max(from, cursor);
+      var sliceEnd = Math.min(to, cursor + HOUR);
+      if (sliceEnd > sliceStart && !isSleepHour(cursor + HOUR / 2, sleep)) {
+        hours += (sliceEnd - sliceStart) / HOUR;
+      }
+      cursor += HOUR;
+      guard++;
+    }
+    return Math.max(0, Math.round(hours));
   }
 
   /* Near enough is the point - 7,640 plays of Billie Jean reads as a
@@ -290,20 +359,19 @@
     return Math.round(n / step) * step;
   }
 
-  /* Two a day, taken from the date so both phones show the same pair. */
+  /* One a day, taken from the date so both phones show the same joke. */
   function pickMeasures(ms, dayIndex) {
     var order = shuffled(window.MEASURES || []);
-    if (order.length < 2) return [];
+    if (!order.length) return null;
 
     var start = ((dayIndex == null ? localDayIndex() : dayIndex) * 2) % order.length;
 
-    var out = [];
-    for (var i = 0; i < order.length && out.length < 2; i++) {
+    for (var i = 0; i < order.length; i++) {
       var item = order[(start + i) % order.length];
       var count = ballpark(ms / (item.s * 1000));
-      if (count >= 1) out.push({ count: count, unit: item.unit });
+      if (count >= 1) return { count: count, unit: item.unit };
     }
-    return out;
+    return null;
   }
 
   /* ---------------- the tick ---------------- */
@@ -345,6 +413,7 @@
     renderMeasures(ms);
     checkCelebrations(now);
     checkMilestones(now);
+    paintMilestoneDay(now);
 
     /* clocks tick on the minute, no point redrawing every second */
     if (p.s === 0 || clocksStale) { renderClocks(); clocksStale = false; }
@@ -1173,6 +1242,7 @@
   function closeNotifyAsk() {
     $('notify').hidden = true;
     $('notify-backdrop').hidden = true;
+    maybeMilestonePopup();
   }
 
   /* ---------------- shared checklist ---------------- */
@@ -1185,6 +1255,7 @@
       return;
     }
     section.hidden = false;
+    applyTodoOpen();
 
     var ul = $('todo-list');
     ul.textContent = '';
@@ -1196,7 +1267,10 @@
 
     $('todo-empty').hidden = sorted.length > 0;
 
+    var left = 0;
     sorted.forEach(function (item) {
+      if (!item.done) left++;
+
       var li = document.createElement('li');
       var row = document.createElement('div');
       row.className = 'todo-row' + (item.done ? ' is-done' : '');
@@ -1235,6 +1309,32 @@
       li.appendChild(row);
       ul.appendChild(li);
     });
+
+    var meta = $('todo-meta');
+    if (!todos.length) meta.textContent = '';
+    else if (!left) meta.textContent = 'all done';
+    else meta.textContent = left + ' left';
+  }
+
+  function todoIsOpen() {
+    try { return localStorage.getItem(TODO_OPEN_KEY) === '1'; }
+    catch (e) { return false; }
+  }
+
+  function applyTodoOpen() {
+    var on = todoIsOpen();
+    var body = $('todo-body');
+    var btn = $('todo-toggle');
+    if (!body || !btn) return;
+    body.hidden = !on;
+    btn.classList.toggle('is-open', on);
+    btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+  }
+
+  function toggleTodos() {
+    try { localStorage.setItem(TODO_OPEN_KEY, todoIsOpen() ? '0' : '1'); }
+    catch (e) {}
+    applyTodoOpen();
   }
 
   function nameOfSeat(seat) {
@@ -1301,6 +1401,7 @@
   function closeHello() {
     $('hello').hidden = true;
     $('hello-backdrop').hidden = true;
+    maybeMilestonePopup();
   }
 
   function renderSyncBits() {
@@ -1383,22 +1484,120 @@
 
   /* ---------------- milestones ---------------- */
 
-  /* Marked once each, per event, so a long wait has a pulse instead of just
-     grinding down. Keyed by event id so two trips don't share a milestone. */
+  /* Marked once each for the push, per event. The overlay itself is allowed
+     to come back every time you open the app during that 24-hour window. */
   var MILESTONES = [
-    { id: 'half', test: function (ms, total) { return total > 14 * DAY && ms <= total / 2; },
-      kicker: 'halfway', title: 'HALFWAY', sub: 'downhill from here, allegedly' },
-    { id: 'm30', days: 30, kicker: 'one month to go', title: '30 DAYS', sub: 'a whole month. we can do a month.' },
-    { id: 'm14', days: 14, kicker: 'two weeks', title: '14 DAYS', sub: 'close enough to start a packing list' },
-    { id: 'm10', days: 10, kicker: 'single digits soon', title: '10 DAYS', sub: 'double figures are over' },
-    { id: 'm7', days: 7, kicker: 'one week', title: '7 DAYS', sub: 'this time next week.' },
-    { id: 'm3', days: 3, kicker: 'three sleeps', title: '3 DAYS', sub: 'ok now it is happening' },
-    { id: 'm1', days: 1, kicker: 'tomorrow', title: 'TOMORROW', sub: 'go to sleep. you will not.' }
+    { id: 'half', rank: 50, test: function (ms, total) {
+        return total > 14 * DAY && ms <= total / 2 && ms > total / 2 - DAY;
+      },
+      kicker: 'halfway', title: 'HALFWAY' },
+    { id: 'm30', days: 30, rank: 30, kicker: 'one month to go', title: '30 DAYS' },
+    { id: 'm14', days: 14, rank: 14, kicker: 'two weeks', title: '14 DAYS' },
+    { id: 'm10', days: 10, rank: 10, kicker: 'single digits soon', title: '10 DAYS' },
+    { id: 'm7', days: 7, rank: 7, kicker: 'one week', title: '7 DAYS' },
+    { id: 'm3', days: 3, rank: 3, kicker: 'three sleeps', title: '3 DAYS' },
+    { id: 'm1', days: 1, rank: 1, kicker: 'tomorrow', title: 'TOMORROW' }
   ];
+
+  var popupShownThisForeground = false;
+  var lastHiddenAt = 0;
+
+  function inMilestoneWindow(m, ms, total) {
+    if (ms <= 0) return false;
+    if (m.days) return ms <= m.days * DAY && ms > (m.days - 1) * DAY;
+    return m.test ? m.test(ms, total) : false;
+  }
+
+  function activeMilestone(now) {
+    var best = null;
+    for (var i = 0; i < events.length; i++) {
+      var e = events[i];
+      var ms = Date.parse(e.date) - now;
+      if (ms <= 0) continue;
+      var total = e.createdAt ? Date.parse(e.date) - e.createdAt : 0;
+
+      for (var j = 0; j < MILESTONES.length; j++) {
+        var m = MILESTONES[j];
+        if (!inMilestoneWindow(m, ms, total)) continue;
+        var cand = { event: e, milestone: m, key: e.id + ':' + m.id, rank: m.rank };
+        if (!best || cand.rank < best.rank || (cand.rank === best.rank && ms < Date.parse(best.event.date) - now)) {
+          best = cand;
+        }
+      }
+    }
+    return best;
+  }
+
+  function paintMilestoneDay(now) {
+    var hit = activeMilestone(now);
+    setDayConfetti(!!hit);
+  }
+
+  function setDayConfetti(on) {
+    var el = $('day-confetti');
+    if (!el) return;
+    var allow = on && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (allow && !el.childNodes.length) {
+      var colors = ['#ff5470', '#ffd166', '#7ee0c1', '#8ab6ff'];
+      for (var i = 0; i < 18; i++) {
+        var s = document.createElement('span');
+        s.style.left = (3 + i * 5.4) + '%';
+        s.style.animationDelay = (Math.random() * 5) + 's';
+        s.style.animationDuration = (7 + Math.random() * 6) + 's';
+        s.style.background = colors[i % colors.length];
+        el.appendChild(s);
+      }
+    }
+    el.hidden = !allow;
+  }
+
+  function canShowMilestonePopup() {
+    return $('celebrate').hidden &&
+      $('hello').hidden &&
+      $('notify').hidden &&
+      $('import').hidden;
+  }
+
+  function maybeMilestonePopup() {
+    if (popupShownThisForeground) return;
+    if (!canShowMilestonePopup()) return;
+    var hit = activeMilestone(Date.now());
+    if (!hit) return;
+
+    popupShownThisForeground = true;
+    var n = bumpMilestoneOpens(hit.key);
+    var line = window.JOKES && JOKES.pickMilestoneLine
+      ? JOKES.pickMilestoneLine(hit.milestone.id, n)
+      : '';
+
+    showCelebration(
+      hit.milestone.kicker + ' \u00b7 ' + hit.event.title,
+      hit.milestone.title,
+      line,
+      true
+    );
+  }
+
+  function bumpMilestoneOpens(key) {
+    var day = localDayIndex();
+    var stamp = day + ':' + key;
+    var map = {};
+    try { map = JSON.parse(localStorage.getItem(MILESTONE_OPENS_KEY)) || {}; }
+    catch (e) { map = {}; }
+    var n = (map[stamp] || 0) + 1;
+    map[stamp] = n;
+    var keys = Object.keys(map);
+    if (keys.length > 40) {
+      keys.sort();
+      keys.slice(0, keys.length - 40).forEach(function (k) { delete map[k]; });
+    }
+    try { localStorage.setItem(MILESTONE_OPENS_KEY, JSON.stringify(map)); } catch (e) {}
+    return n;
+  }
 
   function checkMilestones(now) {
     /* don't bury the first-run prompt under confetti */
-    if (!$('celebrate').hidden || !$('hello').hidden) return;
+    if (!$('hello').hidden) return;
 
     for (var i = 0; i < events.length; i++) {
       var e = events[i];
@@ -1411,17 +1610,11 @@
         var m = MILESTONES[j];
         var key = e.id + ':' + m.id;
         if (celebrated.indexOf(key) !== -1) continue;
+        if (!inMilestoneWindow(m, ms, total)) continue;
 
-        var hit = m.days
-          ? (ms <= m.days * DAY && ms > (m.days * DAY) - DAY)
-          : m.test(ms, total);
-
-        if (hit) {
-          markCelebrated(key);
-          showCelebration(m.kicker + ' \u00b7 ' + e.title, m.title, m.sub);
-          announceMilestone(key, m, e);
-          return;
-        }
+        markCelebrated(key);
+        announceMilestone(key, m, e);
+        return;
       }
     }
   }
@@ -1435,7 +1628,9 @@
       if (!mine) return;
       PUSHER.notify({
         title: milestone.title + ' \u00b7 ' + event.title,
-        message: milestone.sub,
+        message: (window.JOKES && JOKES.pickMilestoneLine)
+          ? JOKES.pickMilestoneLine(milestone.id, 1)
+          : milestone.title,
         tag: 'milestone',
         silent: partnerAsleep()
       });
@@ -1453,10 +1648,12 @@
     );
   }
 
-  function showCelebration(kicker, title, sub) {
+  function showCelebration(kicker, title, sub, withCat) {
     $('celebrate-kicker').textContent = kicker;
     $('celebrate-title').textContent = title;
     $('celebrate-sub').textContent = sub;
+    var cat = $('celebrate-cat');
+    if (cat) cat.hidden = !withCat;
     $('celebrate').hidden = false;
     if (!matchMedia('(prefers-reduced-motion: reduce)').matches) confetti();
   }
@@ -1578,6 +1775,7 @@
     on('hello-skip', 'click', closeHello);
     on('foot-hello', 'click', openHello);
     on('todo-form', 'submit', submitTodo);
+    on('todo-toggle', 'click', toggleTodos);
 
     on('notify-yes', 'click', askForPush);
     on('notify-later', 'click', snoozeNotify);
@@ -1631,12 +1829,20 @@
 
     /* phones freeze timers in the background - resync on return */
     document.addEventListener('visibilitychange', function () {
-      if (document.hidden) return;
+      if (document.hidden) {
+        lastHiddenAt = Date.now();
+        return;
+      }
       render();
       clocksStale = true;
       /* republish the timezone: he may have landed somewhere new */
       if (window.SYNC) SYNC.touch();
       if (window.SPOTIFY) SPOTIFY.poll();
+      /* coming back after a real pause counts as opening the app again */
+      if (lastHiddenAt && Date.now() - lastHiddenAt > 30 * SECOND) {
+        popupShownThisForeground = false;
+        maybeMilestonePopup();
+      }
     });
   }
 
@@ -1726,6 +1932,7 @@
 
       save();
       render();
+      maybeMilestonePopup();
     });
   }
 
@@ -1772,6 +1979,7 @@
 
     /* after the first paint, so it lands on the app rather than a blank page */
     setTimeout(maybeAskNotify, 1200);
+    setTimeout(maybeMilestonePopup, 1800);
   }
 
   if (document.readyState === 'loading') {

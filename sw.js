@@ -4,7 +4,7 @@
  * and memes, which are big and only fetched as they come up. Downloading the
  * whole meme folder onto his phone up front would be rude. */
 
-const VERSION = 'v15';
+const VERSION = 'v16';
 const SHELL_CACHE = `us-shell-${VERSION}`;
 const MEME_CACHE = `us-memes-${VERSION}`;
 
@@ -27,7 +27,8 @@ const SHELL = [
   'manifest.webmanifest',
   'assets/icons/icon-180.png',
   'assets/icons/icon-192.png',
-  'assets/icons/icon-512.png'
+  'assets/icons/icon-512.png',
+  'assets/celebrate/scuba-cat.png'
 ];
 
 // Firebase loads from Google's CDN. Cached so a no-signal launch doesn't sit
