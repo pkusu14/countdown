@@ -1782,6 +1782,13 @@
     on('todo-form', 'submit', submitTodo);
     on('todo-toggle', 'click', toggleTodos);
 
+    on('map-refresh', 'click', function () {
+      if (!window.USMAP || !USMAP.refresh) return;
+      USMAP.refresh()
+        .then(function (n) { toast(n === 1 ? '1 place' : n + ' places'); })
+        .catch(function () { toast("Couldn't refresh the map"); });
+    });
+
     on('notify-yes', 'click', askForPush);
     on('notify-later', 'click', snoozeNotify);
     on('notify-backdrop', 'click', snoozeNotify);
@@ -1912,6 +1919,10 @@
       customs = (items || []).sort(function (x, y) { return (x.at || 0) - (y.at || 0); });
       if (mood === 0) renderMoodGrid();
       if (!$('feel').hidden) renderMyFeelings();
+    });
+
+    SYNC.on('places', function (data) {
+      if (window.USMAP && data && data.items) USMAP.apply(data);
     });
 
     SYNC.on('events', function (remote) {

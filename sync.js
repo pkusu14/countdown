@@ -19,7 +19,7 @@
   var seat = null;
   var ready = false;
 
-  var handlers = { members: [], list: [], events: [], inbox: [], customs: [], state: [] };
+  var handlers = { members: [], list: [], events: [], inbox: [], customs: [], places: [], state: [] };
 
   var SEAT_KEY = 'us.seat.v1';
   var ROOM_KEY = 'us.room.v1';
@@ -104,6 +104,10 @@
     /* only today's worth is ever interesting, and it keeps the payload small */
     room.child('inbox').orderByKey().limitToLast(40).on('value', function (snap) {
       emit('inbox', toArray(snap.val()));
+    });
+
+    room.child('places').on('value', function (snap) {
+      emit('places', snap.val() || null);
     });
 
     if (seat) touch();
@@ -330,6 +334,16 @@
     room.child('events/' + id).remove().catch(function () {});
   }
 
+  function setPlaces(data) {
+    if (!ready || !data) return;
+    room.child('places').set({
+      name: String(data.name || '').slice(0, 80),
+      url: String(data.url || '').slice(0, 200),
+      items: Array.isArray(data.items) ? data.items.slice(0, 200) : [],
+      at: Date.now()
+    }).catch(function () {});
+  }
+
   window.SYNC = {
     init: init,
     on: on,
@@ -357,6 +371,7 @@
     removeListItem: removeListItem,
     pushEvents: pushEvents,
     removeEvent: removeEvent,
+    setPlaces: setPlaces,
     timezone: timezone
   };
 })();

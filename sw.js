@@ -4,7 +4,7 @@
  * and memes, which are big and only fetched as they come up. Downloading the
  * whole meme folder onto his phone up front would be rude. */
 
-const VERSION = 'v19';
+const VERSION = 'v20';
 const SHELL_CACHE = `us-shell-${VERSION}`;
 const MEME_CACHE = `us-memes-${VERSION}`;
 

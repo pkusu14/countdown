@@ -20,13 +20,23 @@
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type'
 };
+
+const LIST_ID = 'o2qJGU_-WpfMiZK5ZNfTSg';
+const LIST_URL = 'https://maps.app.goo.gl/7NY8ZspvaJhkt3SC8';
 
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
+
+    const path = new URL(request.url).pathname.replace(/\/$/, '') || '/';
+    if (request.method === 'GET' && path === '/places') {
+      try { return json(await googlePlaces(), 200); }
+      catch (err) { return json({ error: String(err) }, 502); }
+    }
+
     if (request.method !== 'POST') return json({ error: 'POST only' }, 405);
 
     let body;
@@ -72,6 +82,60 @@ function json(obj, status) {
     status,
     headers: { ...CORS, 'Content-Type': 'application/json' }
   });
+}
+
+/* Public saved-list scrape. Google will not embed the list, so the app
+   draws pins itself. This is the only way to refresh them. */
+async function googlePlaces() {
+  const googleUrl = 'https://www.google.com/maps/preview/entitylist/getlist?hl=en&gl=us&pb=!1m1!1s' +
+    LIST_ID + '!2e2!3e2!4i10000!16b1';
+
+  let text;
+  try {
+    text = await fetchText(googleUrl);
+  } catch (e) {
+    /* Google rate-limits Cloudflare IPs; Jina is the way around that. */
+    text = await fetchText('https://r.jina.ai/' + googleUrl);
+  }
+  return parseList(text);
+}
+
+async function fetchText(url) {
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36' }
+  });
+  if (!res.ok) throw new Error('google ' + res.status);
+  return res.text();
+}
+
+function parseList(text) {
+  const marker = text.indexOf(")]}'");
+  if (marker >= 0) text = text.slice(marker + 4);
+  const start = text.indexOf('[[');
+  if (start < 0) throw new Error('no list');
+  const data = JSON.parse(text.slice(start));
+  const row = data && data[0];
+  const raw = row && row[8];
+  if (!Array.isArray(raw) || !raw.length) throw new Error('empty list');
+
+  const items = raw.map(function (p) {
+    const loc = p && p[1];
+    const coords = loc && loc[5];
+    return {
+      name: String((p && p[2]) || '').slice(0, 80),
+      address: String((loc && loc[2]) || '').slice(0, 120),
+      lat: coords && typeof coords[2] === 'number' ? coords[2] : null,
+      lng: coords && typeof coords[3] === 'number' ? coords[3] : null
+    };
+  }).filter(function (p) { return p.name && p.lat != null && p.lng != null; });
+
+  if (!items.length) throw new Error('no pins');
+  return {
+    name: String((row && row[4]) || 'Places we saved').slice(0, 80),
+    url: LIST_URL,
+    items: items,
+    at: Date.now()
+  };
 }
 
 /* ---------------- the room ---------------- */
