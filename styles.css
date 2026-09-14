@@ -616,6 +616,90 @@ body {
 
 .todo-empty { margin: 6px 2px 0; font-size: 13px; color: var(--muted); }
 
+/* ---------- the map ---------- */
+.map-section { margin-top: 16px; }
+
+.map-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  text-decoration: none;
+  color: inherit;
+  padding: 10px 12px 10px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.map-card:active { transform: scale(0.99); }
+
+.map-preview {
+  position: relative;
+  flex: none;
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  overflow: hidden;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 18px, rgba(255,255,255,0.04) 18px 19px),
+    repeating-linear-gradient(0deg, transparent 0 16px, rgba(255,255,255,0.04) 16px 17px),
+    linear-gradient(160deg, #1a2430 0%, #121820 55%, #18241c 100%);
+}
+
+.map-preview::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 22px;
+  top: 28px;
+  height: 2px;
+  background: rgba(126, 224, 193, 0.28);
+  border-radius: 2px;
+  transform: rotate(-18deg);
+}
+
+.map-preview::after {
+  content: '';
+  position: absolute;
+  left: 18px;
+  right: 10px;
+  top: 46px;
+  height: 2px;
+  background: rgba(138, 182, 255, 0.22);
+  border-radius: 2px;
+  transform: rotate(12deg);
+}
+
+.map-pin {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  z-index: 1;
+  width: 16px;
+  height: 16px;
+  background: var(--accent);
+  border-radius: 50% 50% 50% 0;
+  transform: translate(-50%, -60%) rotate(-45deg);
+  box-shadow: 0 6px 12px rgba(255, 84, 112, 0.4);
+}
+
+.map-copy { flex: 1; min-width: 0; }
+
+.map-title {
+  display: block;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.map-sub {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 /* ---------- meme ---------- */
 .meme-card {
   margin-top: 14px;
