@@ -1099,16 +1099,6 @@ input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); opaci
   width: min(220px, 58vw);
   height: auto;
   margin: 0 auto 8px;
-  mix-blend-mode: lighten;
-  animation: scuba-dance .55s ease-in-out infinite;
-  transform-origin: 50% 80%;
-}
-
-@keyframes scuba-dance {
-  0%, 100% { transform: translateY(0) rotate(-8deg); }
-  25% { transform: translateY(-12px) rotate(5deg); }
-  50% { transform: translateY(0) rotate(-4deg); }
-  75% { transform: translateY(-10px) rotate(7deg); }
 }
 
 .day-confetti {
@@ -1171,6 +1161,5 @@ input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); opaci
 
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
-  .scuba-cat { animation: none; }
   .day-confetti { display: none !important; }
 }
