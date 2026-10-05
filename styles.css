@@ -231,6 +231,24 @@ body {
   white-space: nowrap;
 }
 
+.clock-weather {
+  appearance: none;
+  margin-top: 4px;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+button.clock-weather { cursor: pointer; }
+.clock-weather.is-rough { border-color: transparent; }
+
 /* the far side goes quiet when it's the middle of the night there */
 .clock-side.is-asleep .clock-time,
 .clock-side.is-asleep .clock-place { opacity: 0.45; }
