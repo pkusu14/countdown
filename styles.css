@@ -231,24 +231,6 @@ body {
   white-space: nowrap;
 }
 
-.clock-weather {
-  appearance: none;
-  margin-top: 4px;
-  padding: 3px 9px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--text);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-button.clock-weather { cursor: pointer; }
-.clock-weather.is-rough { border-color: transparent; }
-
 /* the far side goes quiet when it's the middle of the night there */
 .clock-side.is-asleep .clock-time,
 .clock-side.is-asleep .clock-place { opacity: 0.45; }
@@ -611,6 +593,35 @@ button.clock-weather { cursor: pointer; }
 .todo-by { display: block; margin-top: 2px; font-size: 11px; color: var(--muted); }
 
 .todo-row.is-done .todo-text { text-decoration: line-through; color: var(--muted); }
+.todo-row.is-done { background: transparent; border-color: transparent; padding-block: 8px; }
+
+.todo-fold {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 0 4px;
+  padding: 6px 2px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.todo-fold::after {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.2s;
+}
+
+.todo-fold.is-open::after { transform: translateY(1px) rotate(225deg); }
 
 .todo-del {
   flex: none;

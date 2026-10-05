@@ -1032,141 +1032,6 @@
     $('clock-them').classList.toggle('is-asleep', isNight(theirTz));
 
     $('tz-gap').textContent = gapLabel(myTz, theirTz);
-
-    fillWeather($('tz-me-weather'), me.weather, true);
-    fillWeather($('tz-them-weather'), them.weather, false);
-  }
-
-  /* ---------------- weather ---------------- */
-
-  /* Each phone fetches its own weather and shares just the reading. By
-     default the spot is the timezone's city, which needs no permission but
-     means anywhere in India reads as Kolkata. Tapping your own reading asks
-     for the phone's location once, and from then on it follows you. */
-  var WEATHER_FRESH = 30 * MIN;
-  var WEATHER_STALE = 3 * HOUR;
-  var GEO_KEY = 'us.geo.v1';
-  var weatherBusy = false;
-
-  function fillWeather(el, w, mine) {
-    if (!el) return;
-    if (!w || !w.at || Date.now() - w.at > WEATHER_STALE) {
-      el.hidden = true;
-      return;
-    }
-    el.hidden = false;
-    el.textContent = weatherEmoji(w.code, w.day) + ' ' + w.t + '\u00b0';
-    /* a rough reading is a guess from the timezone, not where they are */
-    var rough = w.src !== 'gps';
-    el.classList.toggle('is-rough', rough && !mine);
-    if (mine) {
-      el.title = rough ? 'tap to use where you actually are' : 'from your location';
-    } else {
-      el.title = rough ? 'roughly - from their timezone' : '';
-    }
-  }
-
-  /* WMO weather codes, as Open-Meteo reports them */
-  function weatherEmoji(code, day) {
-    var night = day === 0;
-    if (code === 0) return night ? '\ud83c\udf19' : '\u2600\ufe0f';
-    if (code <= 2) return night ? '\u2601\ufe0f' : '\ud83c\udf24\ufe0f';
-    if (code === 3) return '\u2601\ufe0f';
-    if (code === 45 || code === 48) return '\ud83c\udf2b\ufe0f';
-    if (code >= 51 && code <= 57) return '\ud83c\udf26\ufe0f';
-    if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return '\ud83c\udf27\ufe0f';
-    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return '\u2744\ufe0f';
-    if (code >= 95) return '\u26c8\ufe0f';
-    return '\ud83c\udf21\ufe0f';
-  }
-
-  function refreshMyWeather(force) {
-    if (!window.SYNC || !SYNC.isReady() || !SYNC.hasSeat() || weatherBusy) return;
-    var w = (members[seatOf('me')] || {}).weather;
-    if (!force && w && w.tz === deviceTz() && Date.now() - w.at < WEATHER_FRESH) return;
-
-    weatherBusy = true;
-    myCoords(force).then(function (spot) {
-      if (!spot) return;
-      return fetch('https://api.open-meteo.com/v1/forecast?latitude=' + spot.lat.toFixed(2) +
-          '&longitude=' + spot.lon.toFixed(2) + '&current=temperature_2m,weather_code,is_day')
-        .then(function (res) { return res.json(); })
-        .then(function (data) {
-          var c = data && data.current;
-          if (!c || typeof c.temperature_2m !== 'number') return;
-          SYNC.setWeather({
-            t: Math.round(c.temperature_2m),
-            code: c.weather_code,
-            day: c.is_day,
-            src: spot.src,
-            tz: deviceTz(),
-            at: Date.now()
-          });
-        });
-    }).catch(function () {})
-      .then(function () { weatherBusy = false; });
-  }
-
-  /* Uses the phone's location only once it's been allowed - asking is left
-     to a tap, so opening the app never throws up a permission prompt. */
-  function myCoords(ask) {
-    return geoAllowed().then(function (allowed) {
-      if (!allowed && !ask) return tzCoords();
-      return gpsCoords().catch(function () { return tzCoords(); });
-    });
-  }
-
-  /* Older iPhones can't report the permission, so a successful tap is
-     remembered here too. */
-  var GPS_OK_KEY = 'us.gpsok.v1';
-
-  function geoAllowed() {
-    var remembered = false;
-    try { remembered = localStorage.getItem(GPS_OK_KEY) === '1'; } catch (e) {}
-    if (!navigator.permissions || !navigator.permissions.query) return Promise.resolve(remembered);
-    return navigator.permissions.query({ name: 'geolocation' })
-      .then(function (p) { return p.state === 'granted' || (remembered && p.state !== 'denied'); })
-      .catch(function () { return remembered; });
-  }
-
-  function gpsCoords() {
-    return new Promise(function (resolve, reject) {
-      if (!navigator.geolocation) return reject(new Error('no geolocation'));
-      navigator.geolocation.getCurrentPosition(function (pos) {
-        try { localStorage.setItem(GPS_OK_KEY, '1'); } catch (e) {}
-        resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude, src: 'gps' });
-      }, reject, { timeout: 10000, maximumAge: HOUR, enableHighAccuracy: false });
-    });
-  }
-
-  function tzCoords() {
-    var tz = deviceTz();
-    try {
-      var saved = JSON.parse(localStorage.getItem(GEO_KEY) || 'null');
-      if (saved && saved.tz === tz) return Promise.resolve(saved);
-    } catch (e) {}
-
-    return fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&name=' + encodeURIComponent(placeName(tz)))
-      .then(function (res) { return res.json(); })
-      .then(function (data) {
-        var hit = data && data.results && data.results[0];
-        if (!hit) return null;
-        var spot = { lat: hit.latitude, lon: hit.longitude, src: 'tz', tz: tz };
-        try { localStorage.setItem(GEO_KEY, JSON.stringify(spot)); } catch (e) {}
-        return spot;
-      });
-  }
-
-  function useRealLocation() {
-    var w = (members[seatOf('me')] || {}).weather;
-    if (w && w.src === 'gps') return;
-    toast('Checking where you are\u2026');
-    gpsCoords()
-      .then(function () {
-        refreshMyWeather(true);
-        toast('Weather now follows you');
-      })
-      .catch(function () { toast('Location is off - keeping the rough one'); });
   }
 
   function deviceTz() {
@@ -1765,7 +1630,8 @@
       box.className = 'todo-check';
       box.checked = !!item.done;
       box.addEventListener('change', function () {
-        SYNC.toggleListItem(item.id, box.checked);
+        var on = box.checked;
+        settleTick(row, on, function () { SYNC.toggleListItem(item.id, on); });
       });
 
       var main = document.createElement('div');
@@ -1795,10 +1661,48 @@
       ul.appendChild(li);
     });
 
+    foldDone('todo', ul, sorted.length - left);
+
     var meta = $('todo-meta');
     if (!todos.length) meta.textContent = '';
     else if (!left) meta.textContent = 'all done';
     else meta.textContent = left + ' left';
+  }
+
+  /* Done items stay in the list but tuck under one row at the bottom.
+     Shut again on every open, so the list starts tidy. */
+  var doneShown = { todo: false, films: false };
+
+  function foldDone(name, ul, count) {
+    if (!count) return;
+    var shown = doneShown[name];
+
+    Array.prototype.forEach.call(ul.children, function (li) {
+      if (li.querySelector('.todo-row.is-done')) li.hidden = !shown;
+    });
+
+    var li = document.createElement('li');
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'todo-fold' + (shown ? ' is-open' : '');
+    btn.setAttribute('aria-expanded', shown ? 'true' : 'false');
+    btn.textContent = '\u2713 ' + count + (name === 'films' ? ' watched' : ' done');
+    btn.addEventListener('click', function () {
+      doneShown[name] = !doneShown[name];
+      if (name === 'films') renderFilms();
+      else renderTodos();
+    });
+    li.appendChild(btn);
+
+    var firstDone = ul.querySelector('.todo-row.is-done');
+    ul.insertBefore(li, firstDone ? firstDone.parentNode : null);
+  }
+
+  /* lets the strike-through land before the item folds away */
+  function settleTick(row, checked, commit) {
+    row.classList.toggle('is-done', checked);
+    if (!checked) return commit();
+    setTimeout(commit, 650);
   }
 
   /* Collapsible cards remember open or shut per phone. */
@@ -1868,7 +1772,8 @@
       box.checked = !!film.watched;
       box.setAttribute('aria-label', 'Watched');
       box.addEventListener('change', function () {
-        SYNC.toggleFilm(film.id, box.checked);
+        var on = box.checked;
+        settleTick(row, on, function () { SYNC.toggleFilm(film.id, on); });
       });
 
       var main = document.createElement('div');
@@ -1904,6 +1809,7 @@
       ul.appendChild(li);
     });
 
+    foldDone('films', ul, sorted.length - left);
     backfillPosters();
 
     var meta = $('films-meta');
@@ -2559,7 +2465,6 @@
     on('films-form', 'submit', submitFilm);
     on('films-input', 'input', onFilmInput);
 
-    on('tz-me-weather', 'click', useRealLocation);
     on('meme-folder', 'click', openMemeFolder);
     on('memeq-close', 'click', closeMemeFolder);
     on('memeq-backdrop', 'click', closeMemeFolder);
@@ -2638,7 +2543,6 @@
       clocksStale = true;
       /* republish the timezone: he may have landed somewhere new */
       if (window.SYNC) SYNC.touch();
-      refreshMyWeather();
       if (window.SPOTIFY) SPOTIFY.poll();
       /* coming back after a real pause counts as opening the app again */
       if (lastHiddenAt && Date.now() - lastHiddenAt > 30 * SECOND) {
@@ -2766,8 +2670,6 @@
       /* push subscriptions rotate silently, so re-file ours on every open */
       if (window.PUSHER) PUSHER.refresh();
       if (window.SPOTIFY) SPOTIFY.start();
-      /* after the first member snapshot, so a fresh reading isn't refetched */
-      setTimeout(refreshMyWeather, 3000);
     }
     renderSyncBits();
   }
@@ -2795,7 +2697,6 @@
     }
     render();
     setInterval(tick, SECOND);
-    setInterval(refreshMyWeather, 10 * MIN);
     startSync();
     registerSW();
 

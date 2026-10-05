@@ -232,12 +232,6 @@
     room.child('members/' + seat + '/listening').set(info).catch(function () {});
   }
 
-  /* Only the reading is shared, never where it was taken. */
-  function setWeather(info) {
-    if (!ready || !seat) return;
-    room.child('members/' + seat + '/weather').set(info).catch(function () {});
-  }
-
   function clearListening() {
     if (!ready || !seat) return;
     room.child('members/' + seat + '/listening').remove().catch(function () {});
@@ -459,7 +453,6 @@
     setName: setName,
     setListening: setListening,
     clearListening: clearListening,
-    setWeather: setWeather,
     setPush: setPush,
     clearPush: clearPush,
     addInbox: addInbox,
