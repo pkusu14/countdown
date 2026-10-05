@@ -362,10 +362,18 @@
       title: String(film.title || '').slice(0, 120),
       year: String(film.year || '').slice(0, 4),
       note: String(film.note || '').slice(0, 80),
+      wiki: String(film.wiki || '').slice(0, 160),
+      poster: String(film.poster || '').slice(0, 500),
       by: seat || '?',
       at: Date.now(),
       watched: false
     }).catch(function () {});
+  }
+
+  /* An empty string means "looked, found nothing", so neither phone asks again. */
+  function setFilmPoster(id, url) {
+    if (!ready) return;
+    room.child('films/' + id + '/poster').set(String(url || '').slice(0, 500)).catch(function () {});
   }
 
   function toggleFilm(id, watched) {
@@ -465,6 +473,7 @@
     removeEvent: removeEvent,
     addFilm: addFilm,
     toggleFilm: toggleFilm,
+    setFilmPoster: setFilmPoster,
     removeFilm: removeFilm,
     addMeme: addMeme,
     memeData: memeData,

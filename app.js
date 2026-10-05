@@ -1874,6 +1874,8 @@
       var main = document.createElement('div');
       main.className = 'todo-main';
 
+      var art = posterEl(film.poster);
+
       var title = document.createElement('a');
       title.className = 'todo-text film-link';
       title.href = letterboxdUrl(film);
@@ -1895,11 +1897,14 @@
       main.appendChild(title);
       main.appendChild(by);
       row.appendChild(box);
+      row.appendChild(art);
       row.appendChild(main);
       row.appendChild(del);
       li.appendChild(row);
       ul.appendChild(li);
     });
+
+    backfillPosters();
 
     var meta = $('films-meta');
     if (!films.length) meta.textContent = '';
@@ -1946,18 +1951,97 @@
     filmSearchTimer = setTimeout(function () { searchFilms(q); }, 300);
   }
 
+  function lookupFilms(q) {
+    return fetch('https://en.wikipedia.org/w/rest.php/v1/search/title?q=' + encodeURIComponent(q) + '&limit=12')
+      .then(function (res) { return res.ok ? res.json() : { pages: [] }; })
+      .then(function (data) { return (data.pages || []).map(parseFilm).filter(Boolean); });
+  }
+
   function searchFilms(q) {
     var seq = ++filmSearchSeq;
-    fetch('https://en.wikipedia.org/w/rest.php/v1/search/title?q=' + encodeURIComponent(q) + '&limit=12')
-      .then(function (res) { return res.ok ? res.json() : { pages: [] }; })
-      .then(function (data) {
+    lookupFilms(q)
+      .then(function (all) {
         if (seq !== filmSearchSeq) return;
-        var found = (data.pages || []).map(parseFilm).filter(Boolean).slice(0, 5);
+        var found = all.slice(0, 5);
         showFilmSuggestions(found);
+        return fetchPosters(found.map(function (f) { return f.wiki; })).then(function (posters) {
+          if (seq !== filmSearchSeq) return;
+          found.forEach(function (f) { f.poster = posters[f.wiki] || ''; });
+          showFilmSuggestions(found);
+        });
       })
       .catch(function () {
         if (seq === filmSearchSeq) clearFilmSuggestions();
       });
+  }
+
+  /* The search above leaves posters out because they're not free images;
+     the page-image lookup hands them over when asked for any licence. */
+  function fetchPosters(titles) {
+    titles = titles.filter(Boolean);
+    if (!titles.length) return Promise.resolve({});
+    return fetch('https://en.wikipedia.org/w/api.php?action=query&prop=pageimages&pithumbsize=160' +
+        '&pilicense=any&redirects=1&format=json&formatversion=2&origin=*&titles=' +
+        encodeURIComponent(titles.join('|')))
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        var q = (data && data.query) || {};
+        var out = {};
+        (q.pages || []).forEach(function (p) {
+          if (p.thumbnail && p.thumbnail.source) out[p.title] = p.thumbnail.source;
+        });
+        (q.redirects || []).concat(q.normalized || []).forEach(function (r) {
+          if (out[r.to]) out[r.from] = out[r.to];
+        });
+        return out;
+      })
+      .catch(function () { return {}; });
+  }
+
+  /* Films added before posters existed, or typed in by hand, get looked up
+     once. Whatever comes back is saved for both phones, even nothing. */
+  var posterTried = {};
+
+  function backfillPosters() {
+    if (!window.SYNC || !SYNC.isReady()) return;
+    films.filter(function (f) {
+      return f.poster === undefined && !posterTried[f.id];
+    }).slice(0, 6).forEach(function (f) {
+      posterTried[f.id] = true;
+      findPoster(f).then(function (url) { SYNC.setFilmPoster(f.id, url || ''); });
+    });
+  }
+
+  function findPoster(film) {
+    if (film.wiki) {
+      return fetchPosters([film.wiki]).then(function (p) { return p[film.wiki] || ''; });
+    }
+    var want = String(film.title || '').toLowerCase();
+    return lookupFilms(film.title)
+      .then(function (found) {
+        var same = found.filter(function (f) { return f.title.toLowerCase() === want; });
+        var hit = same.filter(function (f) { return film.year && f.year === film.year; })[0] || same[0];
+        if (!hit) return '';
+        return fetchPosters([hit.wiki]).then(function (p) { return p[hit.wiki] || ''; });
+      })
+      .catch(function () { return ''; });
+  }
+
+  function posterEl(url) {
+    var art = document.createElement('span');
+    art.className = 'film-poster';
+    if (url) {
+      var img = document.createElement('img');
+      img.alt = '';
+      img.loading = 'lazy';
+      img.referrerPolicy = 'no-referrer';
+      img.src = url;
+      img.onerror = function () { art.textContent = '\ud83c\udfac'; };
+      art.appendChild(img);
+    } else {
+      art.textContent = '\ud83c\udfac';
+    }
+    return art;
   }
 
   function parseFilm(page) {
@@ -1977,7 +2061,8 @@
     return {
       title: title,
       year: year,
-      note: by || (/series/i.test(desc) ? 'series' : '')
+      note: by || (/series/i.test(desc) ? 'series' : ''),
+      wiki: rawTitle
     };
   }
 
@@ -1992,6 +2077,9 @@
       b.type = 'button';
       b.className = 'film-sug';
 
+      var text = document.createElement('span');
+      text.className = 'film-sug-text';
+
       var t = document.createElement('span');
       t.className = 'film-sug-title';
       t.textContent = film.title;
@@ -2000,8 +2088,10 @@
       m.className = 'film-sug-meta';
       m.textContent = [film.year, film.note].filter(Boolean).join(' \u00b7 ');
 
-      b.appendChild(t);
-      b.appendChild(m);
+      text.appendChild(t);
+      text.appendChild(m);
+      b.appendChild(posterEl(film.poster));
+      b.appendChild(text);
       b.addEventListener('click', function () { addFilm(film); });
       li.appendChild(b);
       ul.appendChild(li);
