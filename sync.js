@@ -9,6 +9,12 @@
  *   rooms/<room>/list/<id>       { text, done, by, at }
  *   rooms/<room>/events/<id>     { title, emoji, date }
  *   rooms/<room>/customs/<id>    { e, t, by, at }
+ *   rooms/<room>/films/<id>      { title, year, note, by, at, watched, watchedAt }
+ *   rooms/<room>/memes/<id>      { kind, w, h, thumb, by, at }
+ *   rooms/<room>/memedata/<id>   the full image as a data URL
+ *
+ * The full meme images sit apart from their listing so that opening the app
+ * only ever downloads today's, not the whole folder.
  */
 
 (function () {
@@ -19,7 +25,7 @@
   var seat = null;
   var ready = false;
 
-  var handlers = { members: [], list: [], events: [], inbox: [], customs: [], places: [], state: [] };
+  var handlers = { members: [], list: [], events: [], inbox: [], customs: [], places: [], films: [], memes: [], state: [] };
 
   var SEAT_KEY = 'us.seat.v1';
   var ROOM_KEY = 'us.room.v1';
@@ -108,6 +114,14 @@
 
     room.child('places').on('value', function (snap) {
       emit('places', snap.val() || null);
+    });
+
+    room.child('films').on('value', function (snap) {
+      emit('films', toArray(snap.val()));
+    });
+
+    room.child('memes').on('value', function (snap) {
+      emit('memes', toArray(snap.val()));
     });
 
     if (seat) touch();
@@ -334,6 +348,77 @@
     room.child('events/' + id).remove().catch(function () {});
   }
 
+  /* ---------------- watchlist ---------------- */
+
+  function addFilm(film) {
+    if (!ready) return;
+    room.child('films').push({
+      title: String(film.title || '').slice(0, 120),
+      year: String(film.year || '').slice(0, 4),
+      note: String(film.note || '').slice(0, 80),
+      by: seat || '?',
+      at: Date.now(),
+      watched: false
+    }).catch(function () {});
+  }
+
+  function toggleFilm(id, watched) {
+    if (!ready) return;
+    room.child('films/' + id).update({
+      watched: !!watched,
+      watchedAt: watched ? Date.now() : null
+    }).catch(function () {});
+  }
+
+  function removeFilm(id) {
+    if (!ready) return;
+    room.child('films/' + id).remove().catch(function () {});
+  }
+
+  /* ---------------- meme folder ---------------- */
+
+  /* Listing and image go in one write, so neither phone ever sees a meme
+     without its picture. Offline, Firebase queues the write and never
+     settles, hence the timeout. */
+  function addMeme(meme) {
+    if (!ready) return Promise.resolve(false);
+
+    var id = room.child('memes').push().key;
+    var updates = {};
+    updates['memes/' + id] = {
+      kind: meme.kind === 'gif' ? 'gif' : 'jpg',
+      w: meme.w || 0,
+      h: meme.h || 0,
+      thumb: meme.thumb || '',
+      by: seat || '?',
+      at: Date.now()
+    };
+    updates['memedata/' + id] = meme.data;
+
+    var write = room.update(updates)
+      .then(function () { return true; })
+      .catch(function () { return false; });
+    var timeout = new Promise(function (resolve) {
+      setTimeout(function () { resolve(false); }, 45000);
+    });
+    return Promise.race([write, timeout]);
+  }
+
+  function memeData(id) {
+    if (!ready) return Promise.resolve(null);
+    return room.child('memedata/' + id).once('value')
+      .then(function (snap) { return snap.val(); })
+      .catch(function () { return null; });
+  }
+
+  function removeMeme(id) {
+    if (!ready) return;
+    var updates = {};
+    updates['memes/' + id] = null;
+    updates['memedata/' + id] = null;
+    room.update(updates).catch(function () {});
+  }
+
   function setPlaces(data) {
     if (!ready || !data) return;
     room.child('places').set({
@@ -371,6 +456,12 @@
     removeListItem: removeListItem,
     pushEvents: pushEvents,
     removeEvent: removeEvent,
+    addFilm: addFilm,
+    toggleFilm: toggleFilm,
+    removeFilm: removeFilm,
+    addMeme: addMeme,
+    memeData: memeData,
+    removeMeme: removeMeme,
     setPlaces: setPlaces,
     timezone: timezone
   };

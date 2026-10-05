@@ -94,7 +94,7 @@
   <!-- Shown when there are no events at all -->
   <section id="empty" class="empty" hidden>
     <p class="empty-big">Nothing on the calendar.</p>
-    <p class="empty-sub">Which is, frankly, unacceptable. Add the next time you're seeing him.</p>
+    <p id="empty-sub" class="empty-sub">Which is, frankly, unacceptable. Add the next time you're seeing him.</p>
     <button id="empty-add" class="btn primary" type="button">Add the first one</button>
     <button id="empty-paste" class="link-btn" type="button">or paste a link someone sent you</button>
   </section>
@@ -102,7 +102,10 @@
   <!-- Meme of the day -->
   <section id="meme-card" class="meme-card" hidden>
     <img id="meme-img" class="meme-img" alt="Meme of the day" loading="lazy" decoding="async">
-    <p class="meme-foot">meme of the day &middot; <span id="meme-next">new one tomorrow</span></p>
+    <div class="meme-foot">
+      <span class="meme-foot-text">meme of the day &middot; <span id="meme-next">new one tomorrow</span></span>
+      <button id="meme-folder" class="meme-folder" type="button" hidden>+ add one</button>
+    </div>
   </section>
 
   <!-- Feelings: tap to land on his phone -->
@@ -125,7 +128,7 @@
       </span>
     </button>
 
-    <div id="todo-body" hidden>
+    <div id="todo-body" class="todo-body" hidden>
       <form id="todo-form" class="todo-form">
         <input id="todo-input" type="text" placeholder="add something..." maxlength="120" autocomplete="off">
         <button type="submit" class="btn primary todo-add">Add</button>
@@ -133,6 +136,41 @@
 
       <ul id="todo-list" class="todo-list"></ul>
       <p id="todo-empty" class="todo-empty">Nothing on the list yet. What are we doing first?</p>
+    </div>
+  </section>
+
+  <!-- Shared watchlist, collapsed like the list above -->
+  <section id="films-section" class="todo-card" hidden>
+    <button type="button" id="films-toggle" class="todo-toggle" aria-expanded="false">
+      <span class="todo-toggle-text">
+        <span class="section-title">Watchlist</span>
+        <span id="films-meta" class="section-meta"></span>
+      </span>
+    </button>
+
+    <div id="films-body" class="todo-body" hidden>
+      <form id="films-form" class="todo-form">
+        <input id="films-input" type="text" placeholder="search a film or show..." maxlength="120" autocomplete="off">
+        <button type="submit" class="btn primary todo-add">Add</button>
+      </form>
+      <ul id="films-suggest" class="film-suggest" hidden></ul>
+
+      <ul id="films-list" class="todo-list"></ul>
+      <p id="films-empty" class="todo-empty">Nothing to watch yet. Pick something we'll talk through.</p>
+    </div>
+  </section>
+
+  <!-- Countdowns that have run out -->
+  <section id="past-section" class="todo-card" hidden>
+    <button type="button" id="past-toggle" class="todo-toggle" aria-expanded="false">
+      <span class="todo-toggle-text">
+        <span class="section-title">Past countdowns</span>
+        <span id="past-meta" class="section-meta"></span>
+      </span>
+    </button>
+
+    <div id="past-body" class="todo-body" hidden>
+      <ul id="past-list" class="list past-list"></ul>
     </div>
   </section>
 
@@ -268,6 +306,28 @@
     <div class="spacer"></div>
     <button type="button" id="feel-save" class="btn primary">Add it</button>
   </div>
+</div>
+
+<!-- The meme folder: whatever goes in airs one a day, oldest first -->
+<div id="memeq-backdrop" class="backdrop" hidden></div>
+<div id="memeq" class="sheet" role="dialog" aria-modal="true" aria-labelledby="memeq-title" hidden>
+  <div class="sheet-grip"></div>
+  <h3 id="memeq-title" class="sheet-title">The meme folder</h3>
+  <p class="sheet-body">
+    One a day, in the order they went in. Days with nothing queued get one of
+    the usual ones.
+  </p>
+
+  <ul id="memeq-list" class="memeq-list"></ul>
+  <p id="memeq-empty" class="todo-empty">Empty. Unacceptable. Add one.</p>
+  <p id="memeq-error" class="form-error" hidden></p>
+
+  <div class="sheet-actions">
+    <button type="button" id="memeq-close" class="btn">Close</button>
+    <div class="spacer"></div>
+    <button type="button" id="memeq-add" class="btn primary">Add memes</button>
+  </div>
+  <input id="meme-file" type="file" accept="image/*" multiple hidden>
 </div>
 
 <!-- Nudge to turn notifications on, shown once per install until granted -->

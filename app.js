@@ -5,6 +5,9 @@
   var DONE_KEY = 'us.celebrated.v1';
   var NOTIFY_KEY = 'us.notifyask.v1';
   var TODO_OPEN_KEY = 'us.todoopen.v1';
+  var FILMS_OPEN_KEY = 'us.filmsopen.v1';
+  var PAST_OPEN_KEY = 'us.pastopen.v1';
+  var MEME_CACHE_KEY = 'us.memetoday.v1';
   var MILESTONE_OPENS_KEY = 'us.milestoneopens.v1';
   var SECOND = 1000, MIN = 60000, HOUR = 3600000, DAY = 86400000;
 
@@ -20,6 +23,9 @@
 
   var members = {};
   var todos = [];
+  var films = [];
+  var uploads = [];
+  var uploadsLoaded = false;
 
   /* ---------------- storage ---------------- */
 
@@ -118,55 +124,55 @@
 
   /* ---------------- rendering ---------------- */
 
+  function isUpcoming(e, now) {
+    return Date.parse(e.date) > (now === undefined ? Date.now() : now);
+  }
+
+  /* Only dates still ahead get a timer. Once one runs out it moves to the
+     past list for good. */
   function render() {
     sort();
 
     var now = Date.now();
-    var hero = byId(pickedId) || pickHero(now);
+    var upcoming = events.filter(function (e) { return isUpcoming(e, now); });
+    var past = events.filter(function (e) { return !isUpcoming(e, now); });
+
+    var picked = byId(pickedId);
+    if (picked && !isUpcoming(picked, now)) { pickedId = null; picked = null; }
+    var hero = picked || upcoming[0] || null;
     heroId = hero ? hero.id : null;
 
-    $('empty').hidden = events.length > 0;
+    $('empty').hidden = upcoming.length > 0;
+    $('empty-sub').textContent = past.length
+      ? 'The last one is done. Book the next one before this gets weird.'
+      : "Which is, frankly, unacceptable. Add the next time you're seeing him.";
     $('hero').hidden = !hero;
 
     if (hero) {
       $('hero-title').textContent = (hero.emoji ? hero.emoji + '  ' : '') + hero.title;
-      var isPast = Date.parse(hero.date) < now;
-      $('hero-eyebrow').textContent = isPast ? 'it has been' : 'counting down to';
-      $('hero').classList.toggle('is-past', isPast);
+      $('hero-eyebrow').textContent = 'counting down to';
     }
 
-    renderList();
+    renderList(upcoming);
+    renderPast(past);
     renderMeme();
+    applySeason(past.length);
     tick();
   }
 
-  /* On the day itself the meetup should stay front and centre counting up,
-     rather than instantly handing the spotlight to whatever is next. */
-  function pickHero(now) {
-    var justHappened = events.filter(function (e) {
-      var t = Date.parse(e.date);
-      return t <= now && t > now - 12 * HOUR;
-    })[0];
-
-    var upcoming = events.filter(function (e) { return Date.parse(e.date) > now; })[0];
-
-    return justHappened || upcoming || events[0] || null;
-  }
-
-  function renderList() {
+  function renderList(upcoming) {
     var list = $('list');
 
     list.textContent = '';
-    $('list-section').hidden = events.length === 0;
+    $('list-section').hidden = upcoming.length === 0;
 
-    events.forEach(function (e) {
+    upcoming.forEach(function (e) {
       var ts = Date.parse(e.date);
-      var past = ts < Date.now();
 
       var li = document.createElement('li');
       var row = document.createElement('button');
       row.type = 'button';
-      row.className = 'row' + (past ? ' is-past' : '') + (e.id === heroId ? ' is-on' : '');
+      row.className = 'row' + (e.id === heroId ? ' is-on' : '');
       row.dataset.id = e.id;
 
       var emoji = document.createElement('span');
@@ -199,27 +205,341 @@
     });
   }
 
-  function renderMeme() {
-    var memes = window.MEMES || [];
-    var card = $('meme-card');
+  function renderPast(past) {
+    var ul = $('past-list');
+    ul.textContent = '';
+    $('past-section').hidden = past.length === 0;
+    $('past-meta').textContent = past.length === 1 ? '1 done' : past.length + ' done';
+    applyCardOpen('past');
 
+    past.forEach(function (e) {
+      var ts = Date.parse(e.date);
+
+      var li = document.createElement('li');
+      var row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'row is-past';
+      row.dataset.id = e.id;
+
+      var emoji = document.createElement('span');
+      emoji.className = 'row-emoji';
+      emoji.textContent = e.emoji || '\u2726';
+
+      var main = document.createElement('span');
+      main.className = 'row-main';
+
+      var title = document.createElement('span');
+      title.className = 'row-title';
+      title.textContent = e.title;
+
+      var date = document.createElement('span');
+      date.className = 'row-date';
+      date.textContent = 'ended ' + prettyDate(ts);
+
+      var waited = document.createElement('span');
+      waited.className = 'row-away';
+      waited.textContent = e.createdAt && ts > e.createdAt ? 'waited ' + compact(ts - e.createdAt) : '';
+
+      main.appendChild(title);
+      main.appendChild(date);
+      row.appendChild(emoji);
+      row.appendChild(main);
+      row.appendChild(waited);
+      li.appendChild(row);
+      ul.appendChild(li);
+    });
+  }
+
+  /* ---------------- meme of the day ---------------- */
+
+  /* What the card is showing right now, so a redraw doesn't refetch it. */
+  var memeShowing = '';
+
+  /* Uploads air one per day, oldest first, from the day they went in. Two on
+     the same day push the second to tomorrow, and so on. Each phone works
+     this out in its own timezone, so it flips at that person's midnight. */
+  function memeSlots() {
+    var sorted = uploads.slice().sort(function (a, b) {
+      return ((a.at || 0) - (b.at || 0)) || (a.id < b.id ? -1 : 1);
+    });
+    var last = -Infinity;
+    sorted.forEach(function (u) {
+      u.day = Math.max(localDayIndex(u.at || 0), last + 1);
+      last = u.day;
+    });
+    return sorted;
+  }
+
+  function renderMeme() {
+    var card = $('meme-card');
+    var today = localDayIndex();
+    var slots = memeSlots();
+
+    var todays = null;
+    var queued = 0;
+    slots.forEach(function (u) {
+      if (u.day === today) todays = u;
+      else if (u.day > today) queued++;
+    });
+
+    /* until the folder arrives from the database, trust what aired here last */
+    if (!uploadsLoaded && !todays) {
+      var cached = readMemeCache();
+      if (cached && cached.day === today) todays = { id: cached.id, by: cached.by };
+    }
+
+    renderMemeFoot(todays, queued);
+
+    if (todays) {
+      card.hidden = false;
+      showUploadedMeme(todays, today);
+      return;
+    }
+
+    var memes = window.MEMES || [];
+    var img = $('meme-img');
     if (!memes.length) {
-      card.hidden = true;
+      memeShowing = '';
+      img.hidden = true;
+      card.hidden = !canUpload();
       return;
     }
 
     var order = shuffled(memes);
-    var idx = localDayIndex() % order.length;
-    var img = $('meme-img');
+    var idx = today % order.length;
+    var key = 'builtin:' + order[idx];
 
-    img.onerror = function () { card.hidden = true; };
-    img.src = 'assets/memes/' + order[idx];
+    img.hidden = false;
     card.hidden = false;
+    if (memeShowing !== key) {
+      memeShowing = key;
+      img.onerror = function () { card.hidden = true; };
+      img.src = 'assets/memes/' + order[idx];
+    }
 
     warmMemes([
       'assets/memes/' + order[idx],
       'assets/memes/' + order[(idx + 1) % order.length]
     ]);
+  }
+
+  function showUploadedMeme(u, today) {
+    var key = 'upload:' + u.id;
+    if (memeShowing === key) return;
+    memeShowing = key;
+
+    var img = $('meme-img');
+    img.hidden = false;
+    img.onerror = null;
+
+    var cached = readMemeCache();
+    if (cached && cached.id === u.id && cached.data) {
+      img.src = cached.data;
+      return;
+    }
+
+    if (u.thumb) img.src = u.thumb;
+    if (!window.SYNC) return;
+    SYNC.memeData(u.id).then(function (data) {
+      if (!data || memeShowing !== key) return;
+      img.src = data;
+      writeMemeCache({ id: u.id, by: u.by, day: today, data: data });
+    });
+  }
+
+  function renderMemeFoot(todays, queued) {
+    var bits = [];
+    if (todays) {
+      var who = nameOfSeat(todays.by);
+      bits.push(who ? 'from ' + who : 'from the folder');
+    }
+    if (queued) bits.push(queued + ' queued');
+    if (!bits.length) bits.push('new one tomorrow');
+    $('meme-next').textContent = bits.join(' \u00b7 ');
+
+    var btn = $('meme-folder');
+    btn.hidden = !canUpload();
+    btn.textContent = uploads.length ? 'folder' : '+ add one';
+  }
+
+  function canUpload() {
+    return !!(window.SYNC && SYNC.isReady() && SYNC.hasSeat());
+  }
+
+  /* Big GIFs blow past the storage quota; losing the cache only costs a
+     download, so failures are fine. */
+  function readMemeCache() {
+    try { return JSON.parse(localStorage.getItem(MEME_CACHE_KEY)) || null; }
+    catch (e) { return null; }
+  }
+
+  function writeMemeCache(entry) {
+    try { localStorage.setItem(MEME_CACHE_KEY, JSON.stringify(entry)); }
+    catch (e) {
+      try { localStorage.removeItem(MEME_CACHE_KEY); } catch (e2) {}
+    }
+  }
+
+  function dayLabel(day, today) {
+    if (day === today) return 'today';
+    if (day === today + 1) return 'tomorrow';
+    var noon = day * DAY + 12 * HOUR + new Date().getTimezoneOffset() * MIN;
+    return new Date(noon).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+
+  /* ---------------- the meme folder ---------------- */
+
+  function openMemeFolder() {
+    $('memeq-error').hidden = true;
+    renderMemeFolder();
+    $('memeq-backdrop').hidden = false;
+    $('memeq').hidden = false;
+  }
+
+  function closeMemeFolder() {
+    $('memeq').hidden = true;
+    $('memeq-backdrop').hidden = true;
+  }
+
+  function renderMemeFolder() {
+    var ul = $('memeq-list');
+    ul.textContent = '';
+
+    var today = localDayIndex();
+    var slots = memeSlots();
+    var coming = slots.filter(function (u) { return u.day >= today; });
+    var aired = slots.filter(function (u) { return u.day < today; }).reverse().slice(0, 9);
+
+    $('memeq-empty').hidden = slots.length > 0;
+
+    coming.concat(aired).forEach(function (u) {
+      var li = document.createElement('li');
+      li.className = 'memeq-item' + (u.day < today ? ' is-aired' : '') + (u.day === today ? ' is-today' : '');
+
+      var img = document.createElement('img');
+      img.className = 'memeq-thumb';
+      img.alt = '';
+      if (u.thumb) img.src = u.thumb;
+
+      var cap = document.createElement('span');
+      cap.className = 'memeq-cap';
+      var who = nameOfSeat(u.by);
+      cap.textContent = (u.day < today ? 'aired ' : '') + dayLabel(u.day, today) + (who ? ' \u00b7 ' + who : '');
+
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'memeq-del';
+      del.setAttribute('aria-label', 'Remove');
+      del.textContent = '\u00d7';
+      del.addEventListener('click', function () {
+        if (confirm('Take this one out of the folder?')) SYNC.removeMeme(u.id);
+      });
+
+      li.appendChild(img);
+      li.appendChild(cap);
+      li.appendChild(del);
+      ul.appendChild(li);
+    });
+  }
+
+  function uploadMemes(fileList) {
+    var files = [].slice.call(fileList || []);
+    $('meme-file').value = '';
+    if (!files.length || !canUpload()) return;
+
+    var today = localDayIndex();
+    var slots = memeSlots();
+    var first = Math.max(today, slots.length ? slots[slots.length - 1].day + 1 : today);
+
+    toast(files.length === 1 ? 'Uploading\u2026' : 'Uploading ' + files.length + '\u2026', 60000);
+
+    var added = 0;
+    var chain = Promise.resolve();
+    files.forEach(function (file) {
+      chain = chain.then(function () {
+        return prepareMeme(file)
+          .then(function (meme) { return SYNC.addMeme(meme); })
+          .then(function (ok) { if (ok) added++; })
+          .catch(function () {});
+      });
+    });
+
+    chain.then(function () {
+      if (!added) {
+        toast("Couldn't add that - check your signal");
+        return;
+      }
+      var when = dayLabel(first, today);
+      toast(added === 1 ? 'Queued for ' + when : added + ' queued, from ' + when);
+
+      var me = members[seatOf('me')] || {};
+      pingThem({
+        title: (me.name || 'someone') + ' added to the meme folder',
+        message: added === 1 ? 'airs ' + when + '. no peeking.' : added + ' new ones. no peeking.',
+        tag: 'memes',
+        silent: partnerAsleep()
+      });
+    });
+  }
+
+  /* Photos get squeezed to a sensible size. A GIF only keeps its animation if
+     it goes in untouched, so small ones do; big ones become a still. */
+  var GIF_MAX_BYTES = 2.5 * 1024 * 1024;
+  var MEME_MAX_SIDE = 1280;
+  var MEME_MAX_CHARS = 900000;
+
+  function prepareMeme(file) {
+    return new Promise(function (resolve, reject) {
+      if (!/^image\//.test(file.type || 'image/')) return reject(new Error('not an image'));
+
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+
+      img.onload = function () {
+        var w = img.naturalWidth, h = img.naturalHeight;
+        var thumb = drawScaled(img, w, h, 200, 0.6);
+
+        function done(data, kind) {
+          URL.revokeObjectURL(url);
+          resolve({ data: data, kind: kind, thumb: thumb, w: w, h: h });
+        }
+
+        if (file.type === 'image/gif' && file.size <= GIF_MAX_BYTES) {
+          var reader = new FileReader();
+          reader.onload = function () { done(reader.result, 'gif'); };
+          reader.onerror = function () { URL.revokeObjectURL(url); reject(reader.error); };
+          reader.readAsDataURL(file);
+          return;
+        }
+
+        var q = 0.85;
+        var data = drawScaled(img, w, h, MEME_MAX_SIDE, q);
+        while (data.length > MEME_MAX_CHARS && q > 0.45) {
+          q -= 0.1;
+          data = drawScaled(img, w, h, MEME_MAX_SIDE, q);
+        }
+        done(data, 'jpg');
+      };
+
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        reject(new Error('could not read image'));
+      };
+      img.src = url;
+    });
+  }
+
+  function drawScaled(img, w, h, maxSide, quality) {
+    var scale = Math.min(1, maxSide / Math.max(w, h));
+    var canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(w * scale));
+    canvas.height = Math.max(1, Math.round(h * scale));
+    var ctx = canvas.getContext('2d');
+    /* transparent PNGs would otherwise turn black-on-black */
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', quality);
   }
 
   /* Ask the service worker to hold on to today's and tomorrow's meme, so the
@@ -388,14 +708,27 @@
       el.textContent = awayText(Date.parse(e.date) - now);
     });
 
+    checkCelebrations(now);
+    checkMilestones(now);
+    paintMilestoneDay(now);
+
+    /* clocks tick on the minute, no point redrawing every second */
+    if (new Date(now).getSeconds() === 0 || clocksStale) { renderClocks(); clocksStale = false; }
+
     var hero = byId(heroId);
+
+    /* it just ran out with the app open: off to the past list */
+    if (hero && !isUpcoming(hero, now)) {
+      render();
+      return;
+    }
+
     if (!hero) {
       document.title = 'Countdown';
       return;
     }
 
     var ms = Date.parse(hero.date) - now;
-    var isPast = ms < 0;
     var p = parts(ms);
 
     $('d').textContent = p.d;
@@ -403,18 +736,9 @@
     $('m').textContent = pad(p.m);
     $('s').textContent = pad(p.s);
 
-    $('hero').classList.toggle('is-past', isPast);
-    $('hero-eyebrow').textContent = isPast ? 'it has been' : 'counting down to';
-
-    document.title = (isPast ? '' : compact(ms) + ' \u00b7 ') + hero.title;
+    document.title = compact(ms) + ' \u00b7 ' + hero.title;
 
     renderMeasures(ms);
-    checkCelebrations(now);
-    checkMilestones(now);
-    paintMilestoneDay(now);
-
-    /* clocks tick on the minute, no point redrawing every second */
-    if (p.s === 0 || clocksStale) { renderClocks(); clocksStale = false; }
   }
 
   var clocksStale = true;
@@ -924,8 +1248,36 @@
     $('pick').hidden = false;
   }
 
+  /* ---------------- the hand that's dealt ---------------- */
+
+  /* Each finished countdown is a new season: the built-in statuses and throws
+     get reshuffled and a different handful from each group comes up. Counted
+     from the shared events, so both phones land on the same hand. */
+  var season = 0;
+  var dealtSeason = null;
+
+  function applySeason(pastCount) {
+    season = pastCount;
+    if (dealtSeason === season) return;
+    var first = dealtSeason === null;
+    dealtSeason = season;
+    if (first) return;
+
+    $('pick-groups').textContent = '';
+    if ($('mood-tabs').childNodes.length) renderMoodGrid();
+  }
+
+  function dealt(groups, perGroup) {
+    return (groups || []).map(function (g, gi) {
+      return {
+        group: g.group,
+        items: shuffled(g.items, 101 + season * 7919 + gi * 31).slice(0, perGroup)
+      };
+    });
+  }
+
   function buildPicker(box) {
-    (window.STATUSES || []).forEach(function (group) {
+    dealt(window.STATUSES, 8).forEach(function (group) {
       var title = document.createElement('p');
       title.className = 'pick-group-title';
       title.textContent = group.group;
@@ -980,7 +1332,7 @@
      used. Everything after is the built-in list. */
   function moodGroups() {
     return [{ group: 'custom', mine: true, items: customs }]
-      .concat(window.FEELINGS || []);
+      .concat(dealt(window.FEELINGS, 10));
   }
 
   function renderFeelings() {
@@ -1314,25 +1666,219 @@
     else meta.textContent = left + ' left';
   }
 
-  function todoIsOpen() {
-    try { return localStorage.getItem(TODO_OPEN_KEY) === '1'; }
+  /* Collapsible cards remember open or shut per phone. */
+  var CARDS = {
+    todo: { key: TODO_OPEN_KEY, body: 'todo-body', toggle: 'todo-toggle' },
+    films: { key: FILMS_OPEN_KEY, body: 'films-body', toggle: 'films-toggle' },
+    past: { key: PAST_OPEN_KEY, body: 'past-body', toggle: 'past-toggle' }
+  };
+
+  function cardIsOpen(name) {
+    try { return localStorage.getItem(CARDS[name].key) === '1'; }
     catch (e) { return false; }
   }
 
-  function applyTodoOpen() {
-    var on = todoIsOpen();
-    var body = $('todo-body');
-    var btn = $('todo-toggle');
+  function applyCardOpen(name) {
+    var on = cardIsOpen(name);
+    var body = $(CARDS[name].body);
+    var btn = $(CARDS[name].toggle);
     if (!body || !btn) return;
     body.hidden = !on;
     btn.classList.toggle('is-open', on);
     btn.setAttribute('aria-expanded', on ? 'true' : 'false');
   }
 
-  function toggleTodos() {
-    try { localStorage.setItem(TODO_OPEN_KEY, todoIsOpen() ? '0' : '1'); }
+  function toggleCard(name) {
+    try { localStorage.setItem(CARDS[name].key, cardIsOpen(name) ? '0' : '1'); }
     catch (e) {}
-    applyTodoOpen();
+    applyCardOpen(name);
+  }
+
+  function applyTodoOpen() { applyCardOpen('todo'); }
+
+  /* ---------------- watchlist ---------------- */
+
+  function renderFilms() {
+    var section = $('films-section');
+
+    if (!window.SYNC || !SYNC.isReady() || !SYNC.hasSeat()) {
+      section.hidden = true;
+      return;
+    }
+    section.hidden = false;
+    applyCardOpen('films');
+
+    var ul = $('films-list');
+    ul.textContent = '';
+
+    var sorted = films.slice().sort(function (x, y) {
+      if (!!x.watched !== !!y.watched) return x.watched ? 1 : -1;
+      if (x.watched) return (y.watchedAt || 0) - (x.watchedAt || 0);
+      return (x.at || 0) - (y.at || 0);
+    });
+
+    $('films-empty').hidden = sorted.length > 0;
+
+    var left = 0;
+    sorted.forEach(function (film) {
+      if (!film.watched) left++;
+
+      var li = document.createElement('li');
+      var row = document.createElement('div');
+      row.className = 'todo-row' + (film.watched ? ' is-done' : '');
+
+      var box = document.createElement('input');
+      box.type = 'checkbox';
+      box.className = 'todo-check';
+      box.checked = !!film.watched;
+      box.setAttribute('aria-label', 'Watched');
+      box.addEventListener('change', function () {
+        SYNC.toggleFilm(film.id, box.checked);
+      });
+
+      var main = document.createElement('div');
+      main.className = 'todo-main';
+
+      var title = document.createElement('a');
+      title.className = 'todo-text film-link';
+      title.href = letterboxdUrl(film);
+      title.target = '_blank';
+      title.rel = 'noopener';
+      title.textContent = film.title + (film.year ? ' (' + film.year + ')' : '');
+
+      var by = document.createElement('span');
+      by.className = 'todo-by';
+      by.textContent = [film.note, nameOfSeat(film.by)].filter(Boolean).join(' \u00b7 ');
+
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'todo-del';
+      del.setAttribute('aria-label', 'Remove');
+      del.textContent = '\u00d7';
+      del.addEventListener('click', function () { SYNC.removeFilm(film.id); });
+
+      main.appendChild(title);
+      main.appendChild(by);
+      row.appendChild(box);
+      row.appendChild(main);
+      row.appendChild(del);
+      li.appendChild(row);
+      ul.appendChild(li);
+    });
+
+    var meta = $('films-meta');
+    if (!films.length) meta.textContent = '';
+    else if (!left) meta.textContent = 'all watched';
+    else meta.textContent = left + ' to watch';
+  }
+
+  function letterboxdUrl(film) {
+    var q = film.title + (film.year ? ' ' + film.year : '');
+    return 'https://letterboxd.com/search/films/' + encodeURIComponent(q).replace(/%20/g, '+') + '/';
+  }
+
+  function addFilm(film) {
+    if (!film || !film.title) return;
+    SYNC.addFilm(film);
+    $('films-input').value = '';
+    clearFilmSuggestions();
+
+    var me = members[seatOf('me')] || {};
+    pingThem({
+      title: (me.name || 'someone') + ' added to the watchlist',
+      message: film.title + (film.year ? ' (' + film.year + ')' : ''),
+      tag: 'films',
+      silent: partnerAsleep()
+    });
+  }
+
+  function submitFilm(ev) {
+    ev.preventDefault();
+    var text = $('films-input').value.trim();
+    if (text) addFilm({ title: text });
+  }
+
+  /* Wikipedia is the only keyless film search that answers a browser. Its
+     one-line descriptions read "2023 film by Celine Song", which is all a
+     watchlist needs. */
+  var filmSearchTimer = null;
+  var filmSearchSeq = 0;
+
+  function onFilmInput() {
+    clearTimeout(filmSearchTimer);
+    var q = $('films-input').value.trim();
+    if (q.length < 2) { clearFilmSuggestions(); return; }
+    filmSearchTimer = setTimeout(function () { searchFilms(q); }, 300);
+  }
+
+  function searchFilms(q) {
+    var seq = ++filmSearchSeq;
+    fetch('https://en.wikipedia.org/w/rest.php/v1/search/title?q=' + encodeURIComponent(q) + '&limit=12')
+      .then(function (res) { return res.ok ? res.json() : { pages: [] }; })
+      .then(function (data) {
+        if (seq !== filmSearchSeq) return;
+        var found = (data.pages || []).map(parseFilm).filter(Boolean).slice(0, 5);
+        showFilmSuggestions(found);
+      })
+      .catch(function () {
+        if (seq === filmSearchSeq) clearFilmSuggestions();
+      });
+  }
+
+  function parseFilm(page) {
+    var desc = String(page.description || '');
+    var rawTitle = String(page.title || '');
+    /* only the part before "by", or Celine Song's films count as songs */
+    var kind = desc.split(/\bby\b/)[0];
+    if (!/\b(film|movie|series|miniseries|documentary|anime)\b/i.test(kind)) return null;
+    if (/\b(soundtrack|score|album|song|episode|character|franchise|novel|book|video game|actor|actress|director|producer)\b/i.test(kind)) return null;
+
+    var yearRe = /\b(1[89]|20)\d{2}\b/;
+    var year = (yearRe.exec(kind) || yearRe.exec(rawTitle) || [''])[0];
+    var by = (/\bby (.+)$/.exec(desc) || ['', ''])[1];
+    var title = rawTitle.replace(/\s*\([^)]*\b(film|series|miniseries|documentary)\)$/i, '');
+    if (!title) return null;
+
+    return {
+      title: title,
+      year: year,
+      note: by || (/series/i.test(desc) ? 'series' : '')
+    };
+  }
+
+  function showFilmSuggestions(found) {
+    var ul = $('films-suggest');
+    ul.textContent = '';
+    ul.hidden = !found.length;
+
+    found.forEach(function (film) {
+      var li = document.createElement('li');
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'film-sug';
+
+      var t = document.createElement('span');
+      t.className = 'film-sug-title';
+      t.textContent = film.title;
+
+      var m = document.createElement('span');
+      m.className = 'film-sug-meta';
+      m.textContent = [film.year, film.note].filter(Boolean).join(' \u00b7 ');
+
+      b.appendChild(t);
+      b.appendChild(m);
+      b.addEventListener('click', function () { addFilm(film); });
+      li.appendChild(b);
+      ul.appendChild(li);
+    });
+  }
+
+  function clearFilmSuggestions() {
+    filmSearchSeq++;
+    clearTimeout(filmSearchTimer);
+    var ul = $('films-suggest');
+    ul.textContent = '';
+    ul.hidden = true;
   }
 
   function nameOfSeat(seat) {
@@ -1408,7 +1954,9 @@
     renderStatuses();
     renderListening();
     renderTodos();
+    renderFilms();
     renderFeelings();
+    renderMeme();
 
     /* the way back in for anyone who tapped "not now" */
     var unclaimed = !!(window.SYNC && SYNC.isReady() && !SYNC.hasSeat());
@@ -1780,7 +2328,22 @@
     on('hello-skip', 'click', closeHello);
     on('foot-hello', 'click', openHello);
     on('todo-form', 'submit', submitTodo);
-    on('todo-toggle', 'click', toggleTodos);
+    on('todo-toggle', 'click', function () { toggleCard('todo'); });
+    on('films-toggle', 'click', function () { toggleCard('films'); });
+    on('past-toggle', 'click', function () { toggleCard('past'); });
+    on('films-form', 'submit', submitFilm);
+    on('films-input', 'input', onFilmInput);
+
+    on('meme-folder', 'click', openMemeFolder);
+    on('memeq-close', 'click', closeMemeFolder);
+    on('memeq-backdrop', 'click', closeMemeFolder);
+    on('memeq-add', 'click', function () { $('meme-file').click(); });
+    on('meme-file', 'change', function () { uploadMemes($('meme-file').files); });
+
+    on('past-list', 'click', function (ev) {
+      var row = ev.target.closest('.row');
+      if (row) openSheet(byId(row.dataset.id));
+    });
 
     on('map-refresh', 'click', function () {
       if (!window.USMAP || !USMAP.refresh) return;
@@ -1826,7 +2389,7 @@
       if (!row) return;
       /* tap another date to put it on the timer; tap the one already
          showing, or the only one, to edit it */
-      if (row.dataset.id === heroId || events.length === 1) {
+      if (row.dataset.id === heroId || $('list').children.length === 1) {
         openSheet(byId(row.dataset.id));
       } else {
         pickedId = row.dataset.id;
@@ -1836,7 +2399,7 @@
 
     document.addEventListener('keydown', function (ev) {
       if (ev.key !== 'Escape') return;
-      closeSheet(); closeImport(); closePaste(); closePicker(); closeFeelMaker(); closeSpot();
+      closeSheet(); closeImport(); closePaste(); closePicker(); closeFeelMaker(); closeSpot(); closeMemeFolder();
     });
 
     /* phones freeze timers in the background - resync on return */
@@ -1895,9 +2458,22 @@
         $('clocks').hidden = true;
         $('statuses').hidden = true;
         $('todo-section').hidden = true;
+        $('films-section').hidden = true;
         $('feelings').hidden = true;
         $('listening').hidden = true;
       }
+    });
+
+    SYNC.on('films', function (items) {
+      films = items || [];
+      renderFilms();
+    });
+
+    SYNC.on('memes', function (items) {
+      uploads = items || [];
+      uploadsLoaded = true;
+      renderMeme();
+      if (!$('memeq').hidden) renderMemeFolder();
     });
 
     SYNC.on('members', function (m) {
