@@ -12,9 +12,10 @@
  *   rooms/<room>/films/<id>      { title, year, note, by, at, watched, watchedAt }
  *   rooms/<room>/memes/<id>      { kind, w, h, thumb, by, at, ord }
  *   rooms/<room>/memedata/<id>   the full image as a data URL
+ *   rooms/<room>/memelib         { order, hidden }  shared library over MEMES + uploads
  *
  * The full meme images sit apart from their listing so that opening the app
- * only ever downloads today's, not the whole folder.
+ * only ever downloads today's, not the whole library.
  */
 
 (function () {
@@ -25,7 +26,7 @@
   var seat = null;
   var ready = false;
 
-  var handlers = { members: [], list: [], events: [], inbox: [], customs: [], places: [], films: [], memes: [], state: [] };
+  var handlers = { members: [], list: [], events: [], inbox: [], customs: [], places: [], films: [], memes: [], memelib: [], state: [] };
 
   var SEAT_KEY = 'us.seat.v1';
   var ROOM_KEY = 'us.room.v1';
@@ -122,6 +123,10 @@
 
     room.child('memes').on('value', function (snap) {
       emit('memes', toArray(snap.val()));
+    });
+
+    room.child('memelib').on('value', function (snap) {
+      emit('memelib', snap.val() || { order: [], hidden: {} });
     });
 
     if (seat) touch();
@@ -405,10 +410,10 @@
     updates['memedata/' + id] = meme.data;
 
     var write = room.update(updates)
-      .then(function () { return true; })
-      .catch(function () { return false; });
+      .then(function () { return id; })
+      .catch(function () { return null; });
     var timeout = new Promise(function (resolve) {
-      setTimeout(function () { resolve(false); }, 45000);
+      setTimeout(function () { resolve(null); }, 45000);
     });
     return Promise.race([write, timeout]);
   }
@@ -435,6 +440,20 @@
       if (p && p.id) updates['memes/' + p.id + '/ord'] = p.ord;
     });
     room.update(updates).catch(function () {});
+  }
+
+  function setMemeLib(data) {
+    if (!ready || !data) return;
+    var hidden = {};
+    var src = data.hidden || {};
+    Object.keys(src).forEach(function (key) {
+      if (src[key]) hidden[String(key).slice(0, 180)] = true;
+    });
+    room.child('memelib').set({
+      order: Array.isArray(data.order) ? data.order.slice(0, 400) : [],
+      hidden: hidden,
+      at: Date.now()
+    }).catch(function () {});
   }
 
   function setPlaces(data) {
@@ -482,6 +501,7 @@
     memeData: memeData,
     removeMeme: removeMeme,
     setMemeOrds: setMemeOrds,
+    setMemeLib: setMemeLib,
     setPlaces: setPlaces,
     timezone: timezone
   };

@@ -26,6 +26,8 @@
   var films = [];
   var uploads = [];
   var uploadsLoaded = false;
+  var memeLib = { order: [], hidden: {} };
+  var memeLibLoaded = false;
 
   /* ---------------- storage ---------------- */
 
@@ -255,87 +257,142 @@
   /* What the card is showing right now, so a redraw doesn't refetch it. */
   var memeShowing = '';
 
-  /* Uploads air one per day, in folder order, from the day they went in.
-     Two on the same day push the later one to tomorrow, and so on. Each
-     phone works this out in its own timezone, so it flips at midnight. */
+  /* The card and the editor share one library: the files in assets/memes/,
+     plus anything uploaded, minus anything taken out. Order lives in
+     Firebase so both phones stay on the same rotation. */
   function memeOrd(u) {
     return u && u.ord != null ? Number(u.ord) : (u.at || 0);
   }
 
-  function memeSlots() {
-    var sorted = uploads.slice().sort(function (a, b) {
-      var d = memeOrd(a) - memeOrd(b);
-      if (d) return d;
-      return ((a.at || 0) - (b.at || 0)) || (a.id < b.id ? -1 : 1);
-    });
-    var last = -Infinity;
-    sorted.forEach(function (u) {
-      u.day = Math.max(localDayIndex(u.at || 0), last + 1);
-      last = u.day;
-    });
-    return sorted;
+  function builtinMemeId(name) { return 'builtin:' + name; }
+  function uploadMemeId(u) { return 'upload:' + u.id; }
+
+  function memeHidden() {
+    return (memeLib && memeLib.hidden) || {};
   }
 
-  function nextMemeOrd() {
-    var max = 0;
-    uploads.forEach(function (u) {
-      var o = memeOrd(u);
-      if (o > max) max = o;
+  function memeItems() {
+    var hidden = memeHidden();
+    var items = {};
+
+    (window.MEMES || []).forEach(function (name) {
+      if (hidden[name]) return;
+      items[builtinMemeId(name)] = {
+        id: builtinMemeId(name),
+        kind: 'builtin',
+        file: name,
+        src: 'assets/memes/' + name,
+        thumb: 'assets/memes/' + name
+      };
     });
-    return max + 1;
+
+    uploads.forEach(function (u) {
+      items[uploadMemeId(u)] = {
+        id: uploadMemeId(u),
+        kind: 'upload',
+        file: u.id,
+        upload: u,
+        thumb: u.thumb || '',
+        src: '',
+        by: u.by,
+        at: u.at
+      };
+    });
+    return items;
+  }
+
+  function defaultMemeOrder(items) {
+    var ids = shuffled(window.MEMES || []).map(builtinMemeId).filter(function (id) {
+      return !!items[id];
+    });
+    var extras = Object.keys(items).filter(function (id) {
+      return id.indexOf('upload:') === 0;
+    }).sort(function (a, b) {
+      return memeOrd(items[a].upload) - memeOrd(items[b].upload);
+    });
+    return ids.concat(extras);
+  }
+
+  function memeLibrary() {
+    var items = memeItems();
+    var saved = (memeLib && memeLib.order) || [];
+    var list = [];
+    var seen = {};
+
+    saved.forEach(function (id) {
+      if (items[id] && !seen[id]) {
+        list.push(items[id]);
+        seen[id] = true;
+      }
+    });
+    defaultMemeOrder(items).forEach(function (id) {
+      if (items[id] && !seen[id]) {
+        list.push(items[id]);
+        seen[id] = true;
+      }
+    });
+    return list;
+  }
+
+  function writeMemeLib(order, hidden) {
+    memeLib = { order: order || [], hidden: hidden || {} };
+    renderMeme();
+    if ($('memeq') && !$('memeq').hidden) renderMemeFolder();
+    if (window.SYNC && SYNC.setMemeLib) SYNC.setMemeLib(memeLib);
+  }
+
+  function persistLibrary(list) {
+    writeMemeLib(list.map(function (m) { return m.id; }), memeHidden());
   }
 
   function renderMeme() {
     var card = $('meme-card');
-    var today = localDayIndex();
-    var slots = memeSlots();
-
-    var todays = null;
-    var queued = 0;
-    slots.forEach(function (u) {
-      if (u.day === today) todays = u;
-      else if (u.day > today) queued++;
-    });
-
-    /* until the folder arrives from the database, trust what aired here last */
-    if (!uploadsLoaded && !todays) {
-      var cached = readMemeCache();
-      if (cached && cached.day === today) todays = { id: cached.id, by: cached.by };
-    }
-
-    renderMemeFoot(todays, queued);
-
-    if (todays) {
-      card.hidden = false;
-      showUploadedMeme(todays, today);
-      return;
-    }
-
-    var memes = window.MEMES || [];
     var img = $('meme-img');
-    if (!memes.length) {
+    var today = localDayIndex();
+    var lib = memeLibrary();
+
+    if (!lib.length) {
+      var cached = !uploadsLoaded && !memeLibLoaded ? readMemeCache() : null;
+      if (cached && cached.day === today && cached.id) {
+        renderMemeFoot({ kind: 'upload', by: cached.by }, 0);
+        card.hidden = false;
+        showUploadedMeme({ id: cached.id, by: cached.by }, today);
+        return;
+      }
       memeShowing = '';
       img.hidden = true;
       card.hidden = !canUpload();
+      renderMemeFoot(null, 0);
       return;
     }
 
-    var order = shuffled(memes);
-    var idx = today % order.length;
-    var key = 'builtin:' + order[idx];
+    var idx = today % lib.length;
+    var item = lib[idx];
+    var next = lib[(idx + 1) % lib.length];
 
-    img.hidden = false;
     card.hidden = false;
-    if (memeShowing !== key) {
-      memeShowing = key;
-      img.onerror = function () { card.hidden = true; };
-      img.src = 'assets/memes/' + order[idx];
-    }
+    img.hidden = false;
+    renderMemeFoot(item, lib.length);
+    showMemeItem(item, today);
 
-    warmMemes([
-      'assets/memes/' + order[idx],
-      'assets/memes/' + order[(idx + 1) % order.length]
-    ]);
+    var warm = [];
+    if (item.kind === 'builtin') warm.push(item.src);
+    if (next && next.kind === 'builtin') warm.push(next.src);
+    if (warm.length) warmMemes(warm);
+  }
+
+  function showMemeItem(item, today) {
+    if (!item) return;
+    if (item.kind === 'upload') {
+      showUploadedMeme(item.upload || { id: item.file, by: item.by }, today);
+      return;
+    }
+    var key = item.id;
+    if (memeShowing === key) return;
+    memeShowing = key;
+    var img = $('meme-img');
+    img.onerror = function () { $('meme-card').hidden = true; };
+    img.src = item.src;
   }
 
   function showUploadedMeme(u, today) {
@@ -362,19 +419,19 @@
     });
   }
 
-  function renderMemeFoot(todays, queued) {
+  function renderMemeFoot(item, total) {
     var bits = [];
-    if (todays) {
-      var who = nameOfSeat(todays.by);
-      bits.push(who ? 'from ' + who : 'from the folder');
+    if (item && item.kind === 'upload') {
+      var who = nameOfSeat(item.by);
+      bits.push(who ? 'from ' + who : 'from you');
     }
-    if (queued) bits.push(queued + ' queued');
+    if (total > 1) bits.push(total + ' memes');
     if (!bits.length) bits.push('new one tomorrow');
     $('meme-next').textContent = bits.join(' \u00b7 ');
 
     var btn = $('meme-folder');
-    btn.hidden = !canUpload();
-    btn.textContent = 'folder';
+    btn.hidden = !canUpload() && !(window.MEMES || []).length && !uploads.length;
+    btn.textContent = 'edit memes';
   }
 
   function canUpload() {
@@ -402,12 +459,12 @@
     return new Date(noon).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
   }
 
-  /* ---------------- the meme folder ---------------- */
+  /* ---------------- edit memes ---------------- */
 
   var memePreviewId = '';
 
   function openMemeFolder() {
-    $('memeq-error').hidden = true;
+    if ($('memeq-error')) $('memeq-error').hidden = true;
     closeMemePreview();
     renderMemeFolder();
     $('memeq-backdrop').hidden = false;
@@ -415,6 +472,12 @@
   }
 
   function closeMemeFolder() {
+    clearMemeHold();
+    if (memeqDrag) {
+      memeqDrag.li.classList.remove('is-dragging');
+      memeqDrag = null;
+    }
+    if ($('memeq')) $('memeq').classList.remove('is-reordering');
     closeMemePreview();
     $('memeq').hidden = true;
     $('memeq-backdrop').hidden = true;
@@ -428,180 +491,177 @@
     if (img) img.src = '';
   }
 
-  function openMemePreview(u) {
+  function openMemePreview(item) {
     var box = $('memeq-preview');
     var img = $('memeq-preview-img');
-    if (!box || !img || !u) return;
-    memePreviewId = u.id;
-    img.src = u.thumb || '';
+    if (!box || !img || !item) return;
+    memePreviewId = item.id;
+    img.src = item.src || item.thumb || '';
     box.hidden = false;
-    if (!window.SYNC) return;
-    SYNC.memeData(u.id).then(function (data) {
-      if (!data || memePreviewId !== u.id) return;
+    if (item.kind !== 'upload' || !window.SYNC || !item.upload) return;
+    SYNC.memeData(item.upload.id).then(function (data) {
+      if (!data || memePreviewId !== item.id) return;
       img.src = data;
     });
   }
 
   function renderMemeFolder() {
     var queue = $('memeq-queue');
-    var airedUl = $('memeq-list');
-    if (!queue || !airedUl) return;
+    if (!queue) return;
     queue.textContent = '';
-    airedUl.textContent = '';
 
-    var today = localDayIndex();
-    var slots = memeSlots();
-    var coming = slots.filter(function (u) { return u.day >= today; });
-    var aired = slots.filter(function (u) { return u.day < today; }).reverse();
+    var lib = memeLibrary();
+    if ($('memeq-empty')) $('memeq-empty').hidden = lib.length > 0;
+    if ($('memeq-add')) $('memeq-add').hidden = false;
 
-    $('memeq-empty').hidden = slots.length > 0;
-    $('memeq-queue-label').hidden = !slots.length;
-    $('memeq-queue-empty').hidden = !slots.length || coming.length > 0;
-    $('memeq-aired-label').hidden = !aired.length;
-
-    var queued = coming.filter(function (u) { return u.day > today; }).length;
-    var hasToday = coming.some(function (u) { return u.day === today; });
-    var label = 'Queue';
-    if (hasToday && queued) label = 'Queue \u00b7 today + ' + queued;
-    else if (hasToday) label = 'Queue \u00b7 today';
-    else if (queued === 1) label = 'Queue \u00b7 1 up next';
-    else if (queued) label = 'Queue \u00b7 ' + queued + ' up next';
-    $('memeq-queue-label').textContent = label;
-
-    coming.forEach(function (u, i) {
-      queue.appendChild(memeQueueRow(u, today, i, coming.length));
-    });
-
-    aired.forEach(function (u) {
-      airedUl.appendChild(memeAiredTile(u, today));
+    lib.forEach(function (item) {
+      queue.appendChild(memeQueueRow(item));
     });
   }
 
-  function memeQueueRow(u, today, i, total) {
+  function memeQueueRow(item) {
     var li = document.createElement('li');
-    li.className = 'memeq-row' + (u.day === today ? ' is-today' : '');
+    li.className = 'memeq-row';
+    li.dataset.id = item.id;
 
     var img = document.createElement('img');
     img.className = 'memeq-row-thumb';
     img.alt = '';
-    if (u.thumb) img.src = u.thumb;
-    img.addEventListener('click', function () { openMemePreview(u); });
-
-    var text = document.createElement('div');
-    text.className = 'memeq-row-text';
-
-    var when = document.createElement('span');
-    when.className = 'memeq-row-when';
-    when.textContent = dayLabel(u.day, today);
-
-    var who = nameOfSeat(u.by);
-    var sub = document.createElement('span');
-    sub.className = 'memeq-row-who';
-    sub.textContent = who ? 'from ' + who : 'from the folder';
-
-    text.appendChild(when);
-    text.appendChild(sub);
-
-    var actions = document.createElement('div');
-    actions.className = 'memeq-row-actions';
-
-    var up = document.createElement('button');
-    up.type = 'button';
-    up.className = 'memeq-move';
-    up.setAttribute('aria-label', 'Move earlier');
-    up.textContent = '\u25b2';
-    up.disabled = i === 0;
-    up.addEventListener('click', function () { moveMeme(u.id, -1); });
-
-    var down = document.createElement('button');
-    down.type = 'button';
-    down.className = 'memeq-move';
-    down.setAttribute('aria-label', 'Move later');
-    down.textContent = '\u25bc';
-    down.disabled = i === total - 1;
-    down.addEventListener('click', function () { moveMeme(u.id, 1); });
+    img.loading = 'lazy';
+    img.draggable = false;
+    if (item.thumb) img.src = item.thumb;
 
     var del = document.createElement('button');
     del.type = 'button';
     del.className = 'memeq-row-del';
-    del.setAttribute('aria-label', 'Remove');
-    del.textContent = '\u00d7';
-    del.addEventListener('click', function () {
-      if (confirm('Take this one out of the folder?')) SYNC.removeMeme(u.id);
-    });
-
-    actions.appendChild(up);
-    actions.appendChild(down);
-    actions.appendChild(del);
-
-    li.appendChild(img);
-    li.appendChild(text);
-    li.appendChild(actions);
-    return li;
-  }
-
-  function memeAiredTile(u, today) {
-    var li = document.createElement('li');
-    li.className = 'memeq-item is-aired';
-
-    var img = document.createElement('img');
-    img.className = 'memeq-thumb';
-    img.alt = '';
-    if (u.thumb) img.src = u.thumb;
-    img.addEventListener('click', function () { openMemePreview(u); });
-
-    var cap = document.createElement('span');
-    cap.className = 'memeq-cap';
-    var who = nameOfSeat(u.by);
-    cap.textContent = 'aired ' + dayLabel(u.day, today) + (who ? ' \u00b7 ' + who : '');
-
-    var del = document.createElement('button');
-    del.type = 'button';
-    del.className = 'memeq-del';
-    del.setAttribute('aria-label', 'Remove');
-    del.textContent = '\u00d7';
-    del.addEventListener('click', function () {
-      if (confirm('Take this one out of the folder?')) SYNC.removeMeme(u.id);
+    del.setAttribute('aria-label', 'Delete');
+    del.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zm3-9h2v9H9V10zm4 0h2v9h-2V10zM15.5 4l-1-1h-5l-1 1H5v2h14V4h-3.5z"/></svg>';
+    del.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      removeLibraryMeme(item);
     });
 
     li.appendChild(img);
-    li.appendChild(cap);
     li.appendChild(del);
+    li.addEventListener('pointerdown', onMemePointerDown);
     return li;
   }
 
-  function moveMeme(id, dir) {
-    var today = localDayIndex();
-    var slots = memeSlots();
-    var upcoming = slots.filter(function (u) { return u.day >= today; });
-    var i = -1;
-    upcoming.forEach(function (u, n) { if (u.id === id) i = n; });
-    var j = i + dir;
-    if (i < 0 || j < 0 || j >= upcoming.length) return;
+  var memeqHold = null;
+  var memeqDrag = null;
+  var memeqDragUntil = 0;
 
-    var swap = upcoming[i];
-    upcoming[i] = upcoming[j];
-    upcoming[j] = swap;
-
-    var airedMax = 0;
-    slots.forEach(function (u) {
-      if (u.day < today) airedMax = Math.max(airedMax, memeOrd(u));
-    });
-
-    applyMemeOrds(upcoming.map(function (u, n) {
-      return { id: u.id, ord: airedMax + n + 1 };
-    }));
+  function clearMemeHold() {
+    if (!memeqHold) return;
+    clearTimeout(memeqHold.timer);
+    memeqHold = null;
   }
 
-  function applyMemeOrds(pairs) {
-    var map = {};
-    pairs.forEach(function (p) { map[p.id] = p.ord; });
-    uploads.forEach(function (u) {
-      if (Object.prototype.hasOwnProperty.call(map, u.id)) u.ord = map[u.id];
+  function onMemePointerDown(ev) {
+    if (ev.button && ev.button !== 0) return;
+    if (ev.target.closest('.memeq-row-del')) return;
+    var li = ev.currentTarget;
+    clearMemeHold();
+    memeqHold = {
+      li: li,
+      pointerId: ev.pointerId,
+      x: ev.clientX,
+      y: ev.clientY,
+      timer: setTimeout(beginMemeDrag, 400)
+    };
+  }
+
+  function beginMemeDrag() {
+    if (!memeqHold || memeqDrag) return;
+    var hold = memeqHold;
+    memeqHold = null;
+    memeqDrag = { li: hold.li, pointerId: hold.pointerId };
+    hold.li.classList.add('is-dragging');
+    if ($('memeq')) $('memeq').classList.add('is-reordering');
+    try { hold.li.setPointerCapture(hold.pointerId); } catch (e) {}
+    if (navigator.vibrate) {
+      try { navigator.vibrate(12); } catch (e2) {}
+    }
+  }
+
+  function onMemePointerMove(ev) {
+    if (memeqHold && ev.pointerId === memeqHold.pointerId) {
+      if (Math.abs(ev.clientX - memeqHold.x) > 10 || Math.abs(ev.clientY - memeqHold.y) > 10) {
+        clearMemeHold();
+      }
+      return;
+    }
+    if (!memeqDrag || ev.pointerId !== memeqDrag.pointerId) return;
+    ev.preventDefault();
+    var li = memeqDrag.li;
+    var prev = li.previousElementSibling;
+    var next = li.nextElementSibling;
+    if (prev) {
+      var above = prev.getBoundingClientRect();
+      if (ev.clientY < above.top + above.height / 2) {
+        li.parentNode.insertBefore(li, prev);
+        return;
+      }
+    }
+    if (next) {
+      var below = next.getBoundingClientRect();
+      if (ev.clientY > below.top + below.height / 2) {
+        li.parentNode.insertBefore(next, li);
+      }
+    }
+  }
+
+  function onMemePointerUp(ev) {
+    if (memeqHold && ev.pointerId === memeqHold.pointerId) clearMemeHold();
+    if (memeqDrag && ev.pointerId === memeqDrag.pointerId) finishMemeDrag();
+  }
+
+  function finishMemeDrag() {
+    if (!memeqDrag) return;
+    var li = memeqDrag.li;
+    li.classList.remove('is-dragging');
+    if ($('memeq')) $('memeq').classList.remove('is-reordering');
+    memeqDrag = null;
+    memeqDragUntil = Date.now() + 400;
+
+    var ul = $('memeq-queue');
+    if (!ul) return;
+    var items = memeItems();
+    var next = [];
+    var seen = {};
+    [].forEach.call(ul.children, function (el) {
+      var item = items[el.dataset.id];
+      if (item && !seen[item.id]) {
+        next.push(item);
+        seen[item.id] = true;
+      }
     });
-    renderMeme();
-    renderMemeFolder();
-    if (window.SYNC && SYNC.setMemeOrds) SYNC.setMemeOrds(pairs);
+    persistLibrary(next);
+  }
+
+  function removeLibraryMeme(item) {
+    if (!item) return;
+    if (!canUpload()) {
+      toast('Sign in on this phone first');
+      return;
+    }
+    if (!confirm('Take this one out?')) return;
+
+    if (item.kind === 'upload' && item.upload && window.SYNC) {
+      SYNC.removeMeme(item.upload.id);
+      uploads = uploads.filter(function (u) { return u.id !== item.upload.id; });
+    }
+
+    var hidden = {};
+    var src = memeHidden();
+    Object.keys(src).forEach(function (key) { hidden[key] = src[key]; });
+    if (item.kind === 'builtin') hidden[item.file] = true;
+
+    var order = memeLibrary().filter(function (m) {
+      return m.id !== item.id;
+    }).map(function (m) { return m.id; });
+
+    writeMemeLib(order, hidden);
   }
 
   function uploadMemes(fileList) {
@@ -609,39 +669,37 @@
     $('meme-file').value = '';
     if (!files.length || !canUpload()) return;
 
-    var today = localDayIndex();
-    var slots = memeSlots();
-    var first = Math.max(today, slots.length ? slots[slots.length - 1].day + 1 : today);
-    var ord = nextMemeOrd();
-
     toast(files.length === 1 ? 'Uploading\u2026' : 'Uploading ' + files.length + '\u2026', 60000);
 
-    var added = 0;
+    var added = [];
     var chain = Promise.resolve();
     files.forEach(function (file) {
       chain = chain.then(function () {
         return prepareMeme(file)
-          .then(function (meme) {
-            meme.ord = ord++;
-            return SYNC.addMeme(meme);
-          })
-          .then(function (ok) { if (ok) added++; })
+          .then(function (meme) { return SYNC.addMeme(meme); })
+          .then(function (id) { if (id) added.push('upload:' + id); })
           .catch(function () {});
       });
     });
 
     chain.then(function () {
-      if (!added) {
+      if (!added.length) {
         toast("Couldn't add that - check your signal");
         return;
       }
-      var when = dayLabel(first, today);
-      toast(added === 1 ? 'Queued for ' + when : added + ' queued, from ' + when);
+
+      var order = memeLibrary().map(function (m) { return m.id; });
+      added.forEach(function (id) {
+        if (order.indexOf(id) === -1) order.push(id);
+      });
+      writeMemeLib(order, memeHidden());
+
+      toast(added.length === 1 ? 'Added' : added.length + ' added');
 
       var me = members[seatOf('me')] || {};
       pingThem({
-        title: (me.name || 'someone') + ' added to the meme folder',
-        message: added === 1 ? 'airs ' + when + '. no peeking.' : added + ' new ones. no peeking.',
+        title: (me.name || 'someone') + ' added a meme',
+        message: added.length === 1 ? 'a new one is in the list' : added.length + ' new ones in the list',
         tag: 'memes',
         silent: partnerAsleep()
       });
@@ -2634,7 +2692,16 @@
     on('meme-folder', 'click', openMemeFolder);
     on('memeq-close', 'click', closeMemeFolder);
     on('memeq-backdrop', 'click', closeMemeFolder);
-    on('memeq-add', 'click', function () { $('meme-file').click(); });
+    on('memeq-add', 'click', function () {
+      if (!canUpload()) {
+        toast('Sign in on this phone first');
+        return;
+      }
+      $('meme-file').click();
+    });
+    document.addEventListener('pointermove', onMemePointerMove, { passive: false });
+    document.addEventListener('pointerup', onMemePointerUp);
+    document.addEventListener('pointercancel', onMemePointerUp);
     on('meme-file', 'change', function () { uploadMemes($('meme-file').files); });
     on('memeq-preview', 'click', closeMemePreview);
     on('memeq-preview-close', 'click', closeMemePreview);
@@ -2775,6 +2842,15 @@
     SYNC.on('memes', function (items) {
       uploads = items || [];
       uploadsLoaded = true;
+      renderMeme();
+      if (!$('memeq').hidden) renderMemeFolder();
+    });
+
+    SYNC.on('memelib', function (data) {
+      memeLib = data && typeof data === 'object'
+        ? { order: data.order || [], hidden: data.hidden || {} }
+        : { order: [], hidden: {} };
+      memeLibLoaded = true;
       renderMeme();
       if (!$('memeq').hidden) renderMemeFolder();
     });
