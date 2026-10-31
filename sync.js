@@ -10,7 +10,7 @@
  *   rooms/<room>/events/<id>     { title, emoji, date }
  *   rooms/<room>/customs/<id>    { e, t, by, at }
  *   rooms/<room>/films/<id>      { title, year, note, by, at, watched, watchedAt }
- *   rooms/<room>/memes/<id>      { kind, w, h, thumb, by, at }
+ *   rooms/<room>/memes/<id>      { kind, w, h, thumb, by, at, ord }
  *   rooms/<room>/memedata/<id>   the full image as a data URL
  *
  * The full meme images sit apart from their listing so that opening the app
@@ -399,7 +399,8 @@
       h: meme.h || 0,
       thumb: meme.thumb || '',
       by: seat || '?',
-      at: Date.now()
+      at: Date.now(),
+      ord: meme.ord != null ? meme.ord : Date.now()
     };
     updates['memedata/' + id] = meme.data;
 
@@ -424,6 +425,15 @@
     var updates = {};
     updates['memes/' + id] = null;
     updates['memedata/' + id] = null;
+    room.update(updates).catch(function () {});
+  }
+
+  function setMemeOrds(pairs) {
+    if (!ready || !pairs || !pairs.length) return;
+    var updates = {};
+    pairs.forEach(function (p) {
+      if (p && p.id) updates['memes/' + p.id + '/ord'] = p.ord;
+    });
     room.update(updates).catch(function () {});
   }
 
@@ -471,6 +481,7 @@
     addMeme: addMeme,
     memeData: memeData,
     removeMeme: removeMeme,
+    setMemeOrds: setMemeOrds,
     setPlaces: setPlaces,
     timezone: timezone
   };

@@ -104,7 +104,7 @@
     <img id="meme-img" class="meme-img" alt="Meme of the day" loading="lazy" decoding="async">
     <div class="meme-foot">
       <span class="meme-foot-text">meme of the day &middot; <span id="meme-next">new one tomorrow</span></span>
-      <button id="meme-folder" class="meme-folder" type="button" hidden>+ add one</button>
+      <button id="meme-folder" class="meme-folder" type="button" hidden>folder</button>
     </div>
   </section>
 
@@ -308,16 +308,21 @@
   </div>
 </div>
 
-<!-- The meme folder: whatever goes in airs one a day, oldest first -->
+<!-- The meme folder: one a day, in queue order -->
 <div id="memeq-backdrop" class="backdrop" hidden></div>
 <div id="memeq" class="sheet" role="dialog" aria-modal="true" aria-labelledby="memeq-title" hidden>
   <div class="sheet-grip"></div>
   <h3 id="memeq-title" class="sheet-title">The meme folder</h3>
   <p class="sheet-body">
-    One a day, in the order they went in. Days with nothing queued get one of
-    the usual ones.
+    Everything in here airs one a day. Reorder the queue, add more, or take
+    one out. Days with nothing queued get one of the usual ones.
   </p>
 
+  <h4 id="memeq-queue-label" class="memeq-heading" hidden>Queue</h4>
+  <ul id="memeq-queue" class="memeq-queue"></ul>
+  <p id="memeq-queue-empty" class="todo-empty" hidden>Nothing queued. A usual one airs until you add some.</p>
+
+  <h4 id="memeq-aired-label" class="memeq-heading" hidden>Already aired</h4>
   <ul id="memeq-list" class="memeq-list"></ul>
   <p id="memeq-empty" class="todo-empty">Empty. Unacceptable. Add one.</p>
   <p id="memeq-error" class="form-error" hidden></p>
@@ -328,6 +333,11 @@
     <button type="button" id="memeq-add" class="btn primary">Add memes</button>
   </div>
   <input id="meme-file" type="file" accept="image/*" multiple hidden>
+</div>
+
+<div id="memeq-preview" class="memeq-preview" hidden>
+  <button type="button" id="memeq-preview-close" class="memeq-preview-x" aria-label="Close">&times;</button>
+  <img id="memeq-preview-img" class="memeq-preview-img" alt="">
 </div>
 
 <!-- Nudge to turn notifications on, shown once per install until granted -->

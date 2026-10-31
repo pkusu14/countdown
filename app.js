@@ -255,11 +255,17 @@
   /* What the card is showing right now, so a redraw doesn't refetch it. */
   var memeShowing = '';
 
-  /* Uploads air one per day, oldest first, from the day they went in. Two on
-     the same day push the second to tomorrow, and so on. Each phone works
-     this out in its own timezone, so it flips at that person's midnight. */
+  /* Uploads air one per day, in folder order, from the day they went in.
+     Two on the same day push the later one to tomorrow, and so on. Each
+     phone works this out in its own timezone, so it flips at midnight. */
+  function memeOrd(u) {
+    return u && u.ord != null ? Number(u.ord) : (u.at || 0);
+  }
+
   function memeSlots() {
     var sorted = uploads.slice().sort(function (a, b) {
+      var d = memeOrd(a) - memeOrd(b);
+      if (d) return d;
       return ((a.at || 0) - (b.at || 0)) || (a.id < b.id ? -1 : 1);
     });
     var last = -Infinity;
@@ -268,6 +274,15 @@
       last = u.day;
     });
     return sorted;
+  }
+
+  function nextMemeOrd() {
+    var max = 0;
+    uploads.forEach(function (u) {
+      var o = memeOrd(u);
+      if (o > max) max = o;
+    });
+    return max + 1;
   }
 
   function renderMeme() {
@@ -359,7 +374,7 @@
 
     var btn = $('meme-folder');
     btn.hidden = !canUpload();
-    btn.textContent = uploads.length ? 'folder' : '+ add one';
+    btn.textContent = 'folder';
   }
 
   function canUpload() {
@@ -389,57 +404,204 @@
 
   /* ---------------- the meme folder ---------------- */
 
+  var memePreviewId = '';
+
   function openMemeFolder() {
     $('memeq-error').hidden = true;
+    closeMemePreview();
     renderMemeFolder();
     $('memeq-backdrop').hidden = false;
     $('memeq').hidden = false;
   }
 
   function closeMemeFolder() {
+    closeMemePreview();
     $('memeq').hidden = true;
     $('memeq-backdrop').hidden = true;
   }
 
+  function closeMemePreview() {
+    memePreviewId = '';
+    var box = $('memeq-preview');
+    var img = $('memeq-preview-img');
+    if (box) box.hidden = true;
+    if (img) img.src = '';
+  }
+
+  function openMemePreview(u) {
+    var box = $('memeq-preview');
+    var img = $('memeq-preview-img');
+    if (!box || !img || !u) return;
+    memePreviewId = u.id;
+    img.src = u.thumb || '';
+    box.hidden = false;
+    if (!window.SYNC) return;
+    SYNC.memeData(u.id).then(function (data) {
+      if (!data || memePreviewId !== u.id) return;
+      img.src = data;
+    });
+  }
+
   function renderMemeFolder() {
-    var ul = $('memeq-list');
-    ul.textContent = '';
+    var queue = $('memeq-queue');
+    var airedUl = $('memeq-list');
+    if (!queue || !airedUl) return;
+    queue.textContent = '';
+    airedUl.textContent = '';
 
     var today = localDayIndex();
     var slots = memeSlots();
     var coming = slots.filter(function (u) { return u.day >= today; });
-    var aired = slots.filter(function (u) { return u.day < today; }).reverse().slice(0, 9);
+    var aired = slots.filter(function (u) { return u.day < today; }).reverse();
 
     $('memeq-empty').hidden = slots.length > 0;
+    $('memeq-queue-label').hidden = !slots.length;
+    $('memeq-queue-empty').hidden = !slots.length || coming.length > 0;
+    $('memeq-aired-label').hidden = !aired.length;
 
-    coming.concat(aired).forEach(function (u) {
-      var li = document.createElement('li');
-      li.className = 'memeq-item' + (u.day < today ? ' is-aired' : '') + (u.day === today ? ' is-today' : '');
+    var queued = coming.filter(function (u) { return u.day > today; }).length;
+    var hasToday = coming.some(function (u) { return u.day === today; });
+    var label = 'Queue';
+    if (hasToday && queued) label = 'Queue \u00b7 today + ' + queued;
+    else if (hasToday) label = 'Queue \u00b7 today';
+    else if (queued === 1) label = 'Queue \u00b7 1 up next';
+    else if (queued) label = 'Queue \u00b7 ' + queued + ' up next';
+    $('memeq-queue-label').textContent = label;
 
-      var img = document.createElement('img');
-      img.className = 'memeq-thumb';
-      img.alt = '';
-      if (u.thumb) img.src = u.thumb;
-
-      var cap = document.createElement('span');
-      cap.className = 'memeq-cap';
-      var who = nameOfSeat(u.by);
-      cap.textContent = (u.day < today ? 'aired ' : '') + dayLabel(u.day, today) + (who ? ' \u00b7 ' + who : '');
-
-      var del = document.createElement('button');
-      del.type = 'button';
-      del.className = 'memeq-del';
-      del.setAttribute('aria-label', 'Remove');
-      del.textContent = '\u00d7';
-      del.addEventListener('click', function () {
-        if (confirm('Take this one out of the folder?')) SYNC.removeMeme(u.id);
-      });
-
-      li.appendChild(img);
-      li.appendChild(cap);
-      li.appendChild(del);
-      ul.appendChild(li);
+    coming.forEach(function (u, i) {
+      queue.appendChild(memeQueueRow(u, today, i, coming.length));
     });
+
+    aired.forEach(function (u) {
+      airedUl.appendChild(memeAiredTile(u, today));
+    });
+  }
+
+  function memeQueueRow(u, today, i, total) {
+    var li = document.createElement('li');
+    li.className = 'memeq-row' + (u.day === today ? ' is-today' : '');
+
+    var img = document.createElement('img');
+    img.className = 'memeq-row-thumb';
+    img.alt = '';
+    if (u.thumb) img.src = u.thumb;
+    img.addEventListener('click', function () { openMemePreview(u); });
+
+    var text = document.createElement('div');
+    text.className = 'memeq-row-text';
+
+    var when = document.createElement('span');
+    when.className = 'memeq-row-when';
+    when.textContent = dayLabel(u.day, today);
+
+    var who = nameOfSeat(u.by);
+    var sub = document.createElement('span');
+    sub.className = 'memeq-row-who';
+    sub.textContent = who ? 'from ' + who : 'from the folder';
+
+    text.appendChild(when);
+    text.appendChild(sub);
+
+    var actions = document.createElement('div');
+    actions.className = 'memeq-row-actions';
+
+    var up = document.createElement('button');
+    up.type = 'button';
+    up.className = 'memeq-move';
+    up.setAttribute('aria-label', 'Move earlier');
+    up.textContent = '\u25b2';
+    up.disabled = i === 0;
+    up.addEventListener('click', function () { moveMeme(u.id, -1); });
+
+    var down = document.createElement('button');
+    down.type = 'button';
+    down.className = 'memeq-move';
+    down.setAttribute('aria-label', 'Move later');
+    down.textContent = '\u25bc';
+    down.disabled = i === total - 1;
+    down.addEventListener('click', function () { moveMeme(u.id, 1); });
+
+    var del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'memeq-row-del';
+    del.setAttribute('aria-label', 'Remove');
+    del.textContent = '\u00d7';
+    del.addEventListener('click', function () {
+      if (confirm('Take this one out of the folder?')) SYNC.removeMeme(u.id);
+    });
+
+    actions.appendChild(up);
+    actions.appendChild(down);
+    actions.appendChild(del);
+
+    li.appendChild(img);
+    li.appendChild(text);
+    li.appendChild(actions);
+    return li;
+  }
+
+  function memeAiredTile(u, today) {
+    var li = document.createElement('li');
+    li.className = 'memeq-item is-aired';
+
+    var img = document.createElement('img');
+    img.className = 'memeq-thumb';
+    img.alt = '';
+    if (u.thumb) img.src = u.thumb;
+    img.addEventListener('click', function () { openMemePreview(u); });
+
+    var cap = document.createElement('span');
+    cap.className = 'memeq-cap';
+    var who = nameOfSeat(u.by);
+    cap.textContent = 'aired ' + dayLabel(u.day, today) + (who ? ' \u00b7 ' + who : '');
+
+    var del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'memeq-del';
+    del.setAttribute('aria-label', 'Remove');
+    del.textContent = '\u00d7';
+    del.addEventListener('click', function () {
+      if (confirm('Take this one out of the folder?')) SYNC.removeMeme(u.id);
+    });
+
+    li.appendChild(img);
+    li.appendChild(cap);
+    li.appendChild(del);
+    return li;
+  }
+
+  function moveMeme(id, dir) {
+    var today = localDayIndex();
+    var slots = memeSlots();
+    var upcoming = slots.filter(function (u) { return u.day >= today; });
+    var i = -1;
+    upcoming.forEach(function (u, n) { if (u.id === id) i = n; });
+    var j = i + dir;
+    if (i < 0 || j < 0 || j >= upcoming.length) return;
+
+    var swap = upcoming[i];
+    upcoming[i] = upcoming[j];
+    upcoming[j] = swap;
+
+    var airedMax = 0;
+    slots.forEach(function (u) {
+      if (u.day < today) airedMax = Math.max(airedMax, memeOrd(u));
+    });
+
+    applyMemeOrds(upcoming.map(function (u, n) {
+      return { id: u.id, ord: airedMax + n + 1 };
+    }));
+  }
+
+  function applyMemeOrds(pairs) {
+    var map = {};
+    pairs.forEach(function (p) { map[p.id] = p.ord; });
+    uploads.forEach(function (u) {
+      if (Object.prototype.hasOwnProperty.call(map, u.id)) u.ord = map[u.id];
+    });
+    renderMeme();
+    renderMemeFolder();
+    if (window.SYNC && SYNC.setMemeOrds) SYNC.setMemeOrds(pairs);
   }
 
   function uploadMemes(fileList) {
@@ -450,6 +612,7 @@
     var today = localDayIndex();
     var slots = memeSlots();
     var first = Math.max(today, slots.length ? slots[slots.length - 1].day + 1 : today);
+    var ord = nextMemeOrd();
 
     toast(files.length === 1 ? 'Uploading\u2026' : 'Uploading ' + files.length + '\u2026', 60000);
 
@@ -458,7 +621,10 @@
     files.forEach(function (file) {
       chain = chain.then(function () {
         return prepareMeme(file)
-          .then(function (meme) { return SYNC.addMeme(meme); })
+          .then(function (meme) {
+            meme.ord = ord++;
+            return SYNC.addMeme(meme);
+          })
           .then(function (ok) { if (ok) added++; })
           .catch(function () {});
       });
@@ -2470,6 +2636,8 @@
     on('memeq-backdrop', 'click', closeMemeFolder);
     on('memeq-add', 'click', function () { $('meme-file').click(); });
     on('meme-file', 'change', function () { uploadMemes($('meme-file').files); });
+    on('memeq-preview', 'click', closeMemePreview);
+    on('memeq-preview-close', 'click', closeMemePreview);
 
     on('past-list', 'click', function (ev) {
       var row = ev.target.closest('.row');
@@ -2530,6 +2698,10 @@
 
     document.addEventListener('keydown', function (ev) {
       if (ev.key !== 'Escape') return;
+      if ($('memeq-preview') && !$('memeq-preview').hidden) {
+        closeMemePreview();
+        return;
+      }
       closeSheet(); closeImport(); closePaste(); closePicker(); closeFeelMaker(); closeSpot(); closeMemeFolder();
     });
 
